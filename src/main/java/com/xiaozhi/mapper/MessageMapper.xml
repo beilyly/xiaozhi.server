@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.MessageMapper">
+
+    <sql id="messageSql">
+        sys_message.messageId, sys_message.deviceId, sys_message.message, sys_message.sender, sys_message.roleId, sys_message.state, sys_message.createTime, sys_message.messageType
+    </sql>
+
+    <sql id="deviceSql">
+        sys_device.deviceName, sys_device.userId
+    </sql>
+
+    <sql id="roleSql">
+        sys_role.roleId, sys_role.roleName, sys_role.roleDesc, sys_role.voiceName
+    </sql>
+
+    <select id="query" resultType="com.xiaozhi.entity.SysMessage">
+        SELECT
+        <include refid="messageSql"></include>,
+        <include refid="deviceSql"></include>,
+        <include refid="roleSql"></include>
+        FROM
+            sys_message
+            LEFT JOIN sys_device ON sys_message.deviceId = sys_device.deviceId
+            LEFT JOIN sys_role ON sys_message.roleId = sys_role.roleId
+        WHERE
+            sys_message.state = 1
+            <if test="userId != null and userId != ''">AND sys_device.userId = #{userId}</if>
+            <if test="deviceId != null and deviceId != ''">
+                AND sys_message.deviceId = #{deviceId}
+            </if>
+            <if test="messageType != null and messageType != ''">
+                AND sys_message.messageType = #{messageType}
+            </if>
+            <if test="deviceName != null and deviceName != ''">
+                AND sys_device.deviceName = #{deviceName}
+            </if>
+            <if test="startTime != null">
+                AND sys_message.createTime &gt;= #{startTime} AND sys_message.createTime &lt;= #{endTime}
+            </if>
+            <if test="sender != null and sender != ''">
+                AND sys_message.sender = #{sender}
+            </if>
+        ORDER BY sys_message.createTime DESC
+    </select>
+
+    <insert id="add" parameterType="com.xiaozhi.entity.SysMessage">
+        INSERT INTO sys_message ( deviceId, sessionId, sender, roleId, message, messageType ,createTime)
+        SELECT #{deviceId}, #{sessionId}, #{sender}, #{roleId}, #{message}, #{messageType},#{createTime,jdbcType=TIMESTAMP}
+    </insert>
+
+    <update id="delete" parameterType="com.xiaozhi.entity.SysMessage">
+        UPDATE sys_message
+        INNER JOIN sys_device ON sys_message.deviceId = sys_device.deviceId
+        SET sys_message.state = '0'
+        WHERE
+            sys_device.userId = #{userId}
+        <if test="messageId != null and messageId != ''">
+            AND sys_message.messageId = #{messageId}
+        </if>
+        <if test="deviceId != null and deviceId != ''">
+            AND sys_message.deviceId = #{deviceId}
+        </if>
+    </update>
+
+</mapper>

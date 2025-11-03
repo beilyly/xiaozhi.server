@@ -1,0 +1,92 @@
+services:
+  mysql:
+    build:
+      context: .
+      dockerfile: Dockerfile-mysql
+    ports:
+      - "13306:3306"  # 修改为 13306 或其他未使用的端口
+    networks:
+      - app-network
+    volumes:
+      - mysql_data:/var/lib/mysql  # 持久化数据
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "xiaozhi", "-p123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile-node
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8084:8084"
+    networks:
+      - app-network
+    environment:
+      - API_URL=http://server:8091
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile-server
+      args:
+        - VOSK_MODEL_SIZE=${VOSK_MODEL_SIZE:-standard}
+      # 添加构建缓存设置
+      cache_from:
+        - eclipse-temurin:21-jre
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8091:8091"
+    networks:
+      - app-network
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/xiaozhi?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=xiaozhi
+      - SPRING_DATASOURCE_PASSWORD=123456
+      - HOST_IP=192.168.1.18   # ← 这里添加
+    volumes:
+      - maven_repo:/root/.m2/repository  # 持久化Maven仓库
+      - vosk_models:/vosk_cache  # 持久化Vosk模型
+      - app_files:/Volumes/data/data_download/espdemo/app/files  # 持久化文件存储
+    restart: on-failure  # 添加重启策略，如果启动失败会自动重试
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - app-network
+    volumes:
+      - /Users/mac_1/.ollama:/root/.ollama  # 使用容器内部持久化目录
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+        ollama serve &
+        sleep 5 &&
+        ollama run deepseek-r1:1.5b &&
+        tail -f /dev/null
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql_data:  # 定义持久化卷
+  maven_repo:  # 持久化Maven仓库
+  vosk_models:  # 持久化Vosk模型
+  ollama_data:  # ✅ ← 添加这个，才能被 ollama 服务使用
+  app_files:  # 持久化文件存储
