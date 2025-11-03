@@ -56,6 +56,7 @@ public class SysDeviceServiceImpl extends BaseServiceImpl implements SysDeviceSe
 
     @Resource
     private ApplicationContext applicationContext;
+    private SessionManager sessionManager;
 
     /**
      * 添加设备
@@ -179,6 +180,7 @@ public class SysDeviceServiceImpl extends BaseServiceImpl implements SysDeviceSe
      * @return
      */
     @Override
+    @Transactional(transactionManager = "transactionManager")
     @CacheEvict(value = CACHE_NAME, key = "#device.deviceId.replace(\":\", \"-\")")
     public int update(SysDevice device) {
         int rows = deviceMapper.update(device);

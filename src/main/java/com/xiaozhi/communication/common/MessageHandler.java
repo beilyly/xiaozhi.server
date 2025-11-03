@@ -98,7 +98,7 @@ public class MessageHandler {
         String deviceId = deviceIdAuth;
         String sessionId = chatSession.getSessionId();
         // 注册会话
-        sessionManager.registerSession(sessionId, chatSession);
+        sessionManager.registerSession(sessionId, chatSession, deviceId);
 
         logger.info("开始查询设备信息 - DeviceId: {}", deviceId);
         SysDevice device = Optional.ofNullable(deviceService.selectDeviceById(deviceId)).orElse(new SysDevice());

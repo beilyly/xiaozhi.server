@@ -62,7 +62,6 @@ public class DeviceController extends BaseController {
 
     @Value("${xiaozhi.communication.protocol:both}")
     private String communicationProtocol;
-
     /**
      * 设备查询
      * 
@@ -207,7 +206,6 @@ public class DeviceController extends BaseController {
                 // 提取芯片型号
                 if (jsonData.containsKey("chip_model_name")) {
                     device.setChipModelName((String) jsonData.get("chip_model_name"));
-                    
                 }
 
                 // 提取应用版本
@@ -265,10 +263,9 @@ public class DeviceController extends BaseController {
             serverTimeData.put("timestamp", timestamp);
             serverTimeData.put("timezone_offset", 480); // 东八区
 
-            // 设置固件信息
-            firmwareData.put("url", cmsUtils.getOtaAddress());
-            firmwareData.put("version", "1.0.0");
-
+            // 设置固件信息（优先使用最新上传的固件文件，否则使用配置的OTA地址）
+            firmwareData.put("url", cmsUtils.getLatestFirmwareDownloadUrl());
+            firmwareData.put("version", cmsUtils.getFirmwareVersion());
             // 检查设备是否已绑定
             if (ObjectUtils.isEmpty(queryDevice)) {
                 // 设备未绑定，生成验证码

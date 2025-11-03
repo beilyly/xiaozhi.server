@@ -37,6 +37,8 @@ public class WebMvcConfig implements WebMvcConfigurer {  // 实现接口而不�
                         "/audio/**",
                         "/uploads/**",
                         "/ws/**",
+                        // 添加固件下载路径，无需登录
+                        "/api/file/firmware/download/**",
                         // 添加 swagger 相关路径
                         "/swagger-ui/**",
                         "/v3/api-docs/**",

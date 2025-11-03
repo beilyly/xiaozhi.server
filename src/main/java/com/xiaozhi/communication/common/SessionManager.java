@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Sinks;
@@ -41,8 +42,14 @@ import java.util.concurrent.TimeUnit;
 public class SessionManager {
     private static final Logger logger = LoggerFactory.getLogger(SessionManager.class);
 
+    // 设置不活跃超时时间为60秒
+    private static final long INACTIVITY_TIMEOUT_SECONDS = 60;
+
     // 用于存储所有连接的会话信息
     private final ConcurrentHashMap<String, ChatSession> sessions = new ConcurrentHashMap<>();
+    
+    // 用于存储设备ID到会话的映射，与sessions保持同步
+    private final ConcurrentHashMap<String, ChatSession> deviceSessions = new ConcurrentHashMap<>();
 
     // 存储验证码生成状态
     private final ConcurrentHashMap<String, Boolean> captchaState = new ConcurrentHashMap<>();
@@ -66,6 +73,7 @@ public class SessionManager {
     private DialogueService getDialogueService() {
         return applicationContext.getBean(DialogueService.class);
     }
+    private ApplicationEventPublisher eventPublisher;
 
     /**
      * 初始化方法，启动定时检查不活跃会话的任务
@@ -98,7 +106,6 @@ public class SessionManager {
      */
     @PreDestroy
     public void destroy() {
-        
         scheduler.shutdown();
         try {
             if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -129,6 +136,7 @@ public class SessionManager {
                             DialogueService dialogueService = getDialogueService();
                             dialogueService.sendGoodbyeMessage(session);
                         }
+
                     }
                 }
             });
@@ -158,6 +166,18 @@ public class SessionManager {
         sessions.put(sessionId, chatSession);
         logger.info("会话已注册 - SessionId: {}  SessionType: {}", sessionId, chatSession.getClass().getSimpleName());
         applicationContext.publishEvent(new ChatSessionOpenEvent(chatSession));
+    }
+
+    public void registerSession(String sessionId, ChatSession chatSession, String deviceId) {
+        sessions.put(sessionId, chatSession);
+        deviceSessions.put(deviceId, chatSession);
+        logger.info("会话已注册 - SessionId: {}  SessionType: {}", sessionId, chatSession.getClass().getSimpleName());
+        // 发布设备重连事件，让DeviceMessageQueueService处理待发送消息
+        if (chatSession.getSysDevice() != null) {
+            // 同时更新设备ID映射
+            logger.info("发布设备重连事件 - DeviceId: {}, SessionId: {}", deviceId, sessionId);
+            applicationContext.publishEvent(new ChatSessionOpenEvent(chatSession));
+        }
     }
 
     /**
@@ -201,6 +221,7 @@ public class SessionManager {
                 applicationContext.publishEvent(new ChatSessionCloseEvent(chatSession));
                 logger.info("会话已关闭 - SessionId: {} SessionType: {}", chatSession.getSessionId(), chatSession.getClass().getSimpleName());
             }
+
             // 清理音频流
             Sinks.Many<byte[]> sink = chatSession.getAudioSinks();
             if (sink != null) {
@@ -214,6 +235,7 @@ public class SessionManager {
             if (conversation != null) {
                 conversation.clear();
             }
+
         } catch (Exception e) {
             logger.error("清理会话资源时发生错误 - SessionId: {}",
                     chatSession.getSessionId(), e);
@@ -231,6 +253,8 @@ public class SessionManager {
         ChatSession chatSession = sessions.get(sessionId);
         if(chatSession != null){
             chatSession.setSysDevice(device);
+            // 同时更新设备ID映射
+            deviceSessions.put(device.getDeviceId(), chatSession);
             updateLastActivity(sessionId); // 更新活动时间
             logger.debug("设备配置已注册 - SessionId: {}, DeviceId: {}", sessionId, device.getDeviceId());
         }
@@ -294,20 +318,15 @@ public class SessionManager {
     public ChatSession getSession(String sessionId) {
         return sessions.get(sessionId);
     }
-
-    /**
-     * 根据设备ID获取会话
+    /*
+     * 获取会话
      *
      * @param deviceId 设备ID
-     * @return 会话对象，如果不存在则返回null
+     * @return 会话ID
      */
     public ChatSession getSessionByDeviceId(String deviceId) {
-        return sessions.values().stream()
-                .filter(session -> session.getSysDevice() != null && deviceId.equals(session.getSysDevice().getDeviceId()))
-                .findFirst()
-                .orElse(null);
+        return deviceSessions.get(deviceId);
     }
-
 
     /**
      * 获取设备配置

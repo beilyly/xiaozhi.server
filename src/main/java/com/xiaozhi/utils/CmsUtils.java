@@ -40,6 +40,14 @@ public class CmsUtils {
 
     @Value("${xiaozhi.server.domain:}")
     private String domain;
+    @Value("${xiaozhi.ota.url:}")
+    private String configuredOtaUrl;
+
+    @Value("${xiaozhi.firmware.version:1.0.0}")
+    private String firmwareVersion;
+
+    @Value("${xiaozhi.firmware.downloadurl}")
+    private String defaultFirewareDownloadUrl;
 
     // 初始化websocketAddress、otaAddress
     @PostConstruct
@@ -68,6 +76,7 @@ public class CmsUtils {
     public static void setUser(HttpServletRequest request, SysUser user) {
         request.setAttribute(USER_ATTRIBUTE_KEY, user);
     }
+
 
     public static Integer getUserId() {
         SysUser user = getUser();
@@ -104,6 +113,68 @@ public class CmsUtils {
     // OTA地址
     public String getOtaAddress() {
         return otaAddress;
+    }
+
+    public String getFirmwareVersion() {
+        return firmwareVersion;
+    }
+
+    /**
+     * 获取最新的固件下载地址
+     * 优先返回最新上传的固件文件下载地址
+     * 
+     * @return 固件下载地址
+     */
+    public String getLatestFirmwareDownloadUrl() {
+        try {
+            // 查找最新的固件文件
+            String firmwareDir = "/app/files/firmware";
+            File dir = new File(firmwareDir);
+            if (!dir.exists()) {
+                return defaultFirewareDownloadUrl; // 如果没有固件文件，返回默认OTA地址
+            }
+
+            // 查找最新的.bin文件
+            File latestFile = findLatestFirmwareFile(dir);
+            if (latestFile != null) {
+                String fileName = latestFile.getName();
+                String serverAddress = getServerAddress();
+                return serverAddress + "/api/file/firmware/download/" + fileName;
+            }
+
+            return defaultFirewareDownloadUrl; // 如果没有找到固件文件，返回默认OTA地址
+        } catch (Exception e) {
+            logger.warn("获取最新固件下载地址失败，使用默认地址: {}", e.getMessage());
+            return defaultFirewareDownloadUrl;
+        }
+    }
+
+    /**
+     * 递归查找最新的固件文件
+     */
+    private File findLatestFirmwareFile(File dir) {
+        File latestFile = null;
+        long latestTime = 0;
+
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return null;
+        }
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                File subLatest = findLatestFirmwareFile(file);
+                if (subLatest != null && subLatest.lastModified() > latestTime) {
+                    latestFile = subLatest;
+                    latestTime = subLatest.lastModified();
+                }
+            } else if (file.getName().endsWith(".bin") && file.lastModified() > latestTime) {
+                latestFile = file;
+                latestTime = file.lastModified();
+            }
+        }
+
+        return latestFile;
     }
 
     // Server地址
