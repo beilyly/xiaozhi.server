@@ -77,7 +77,21 @@ public class CmsUtils {
         request.setAttribute(USER_ATTRIBUTE_KEY, user);
     }
 
-
+    /**
+     * 检查用户是否已登录
+     *
+     * @param request HTTP请求
+     * @return 是否已登录
+     */
+    public static boolean isUserLoggedIn(HttpServletRequest request) {
+        try {
+            SysUser user = getUser();
+            return user != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
     public static Integer getUserId() {
         SysUser user = getUser();
         if (user != null) {
