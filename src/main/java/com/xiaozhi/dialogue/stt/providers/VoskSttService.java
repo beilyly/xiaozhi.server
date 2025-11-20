@@ -55,18 +55,16 @@ public class VoskSttService implements SttService {
                 System.load(System.getProperty("user.dir") + "/lib/libvosk.dylib");
                 logger.info("Vosk library loaded for macOS M-series chip.");
             } else {
-                System.load(System.getProperty("user.dir") + "/lib/libvosk_x86.dylib");
                 logger.info("Not macOS M-series chip, skipping Vosk library load.");
             }
-
             // 禁用Vosk日志输出
-//            LibVosk.setLogLevel(LogLevel.WARNINGS);
+            LibVosk.setLogLevel(LogLevel.WARNINGS);
+
             // 加载模型，路径为配置的模型目录
             voskModelPath = System.getProperty("user.dir") + File.separator + Paths.get("models", "vosk-model");
             model = new Model(voskModelPath);
             modelLoaded = true;
             logger.info("Vosk 模型加载成功！路径: {}", voskModelPath);
-
         } catch (Exception e) {
             modelLoaded = false;
             logger.warn("Vosk 模型加载失败！将使用其他STT服务: {}", e.getMessage());
