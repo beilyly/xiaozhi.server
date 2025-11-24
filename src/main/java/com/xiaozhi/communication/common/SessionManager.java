@@ -47,7 +47,7 @@ public class SessionManager {
 
     // 用于存储所有连接的会话信息
     private final ConcurrentHashMap<String, ChatSession> sessions = new ConcurrentHashMap<>();
-    
+
     // 用于存储设备ID到会话的映射，与sessions保持同步
     private final ConcurrentHashMap<String, ChatSession> deviceSessions = new ConcurrentHashMap<>();
 
@@ -94,7 +94,7 @@ public class SessionManager {
                     logger.error("项目启动时设置设备状态为离线失败", e);
                 }
             }, 1, TimeUnit.SECONDS);
-        
+
             // 定期检查不活跃的会话
             scheduler.scheduleAtFixedRate(this::checkInactiveSessions, 10, 10, TimeUnit.SECONDS);
             logger.info("不活跃会话检查任务已启动，超时时间: {}秒", inactiveTimeOutSeconds);
@@ -325,6 +325,9 @@ public class SessionManager {
      * @return 会话ID
      */
     public ChatSession getSessionByDeviceId(String deviceId) {
+        if (deviceId == null){
+            return null;
+        }
         return deviceSessions.get(deviceId);
     }
 
