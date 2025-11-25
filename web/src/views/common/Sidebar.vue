@@ -27,7 +27,7 @@
 
 <script>
 import { Menu } from "ant-design-vue";
-import router from "@/router/index.js";
+import router from "@/router";
 import mixin from "@/mixins/index";
 import { mapGetters } from 'vuex';
 
@@ -79,9 +79,11 @@ export default {
     "sub-menu": SubMenu,
   },
   data() {
+    // 获取主布局路由的子路由（侧边栏菜单）
+    const mainRoute = router.getRoutes().find(r => r.path === '/' && r.children);
     return {
       // 侧边栏
-      sidebar: router.options.routes[1].children,
+      sidebar: mainRoute?.children || [],
       rootSubmenuKeys: ["/setting", "/config"],
       openKeys: ["/config"],
     };

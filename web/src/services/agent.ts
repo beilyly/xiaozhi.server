@@ -2,7 +2,7 @@
  * 智能体管理相关服务
  */
 import { http } from './request'
-import api from './api'
+import api from './api.ts'
 import type { Agent, AgentQueryParams, PlatformConfig } from '@/types/agent'
 
 /**

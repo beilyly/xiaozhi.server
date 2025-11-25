@@ -1,5 +1,5 @@
 import { http } from './request'
-import api from './api'
+import api from './api.ts'
 import type { Config, ConfigQueryParams } from '@/types/config'
 import type { PlatformConfig } from '@/types/agent'
 

@@ -14,7 +14,7 @@ import type {
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000,
   withCredentials: true,
   headers: {

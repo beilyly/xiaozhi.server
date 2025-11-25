@@ -22,7 +22,7 @@ export default defineConfig({
       '/api': {
         target: process.env.API_URL || 'http://localhost:8091',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '/api')
+        // 不修改路径，直接转发 /api/* 到后端 /api/*
       }
     }
   }

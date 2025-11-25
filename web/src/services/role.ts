@@ -1,5 +1,5 @@
 import { http } from './request'
-import api from './api'
+import api from './api.ts'
 import type { Role, RoleQueryParams, RoleFormData, TestVoiceParams } from '@/types/role'
 import type { PromptTemplate, TemplateQuery } from '@/types/template'
 import type { PageResponse, DataResponse } from '@/types/api'

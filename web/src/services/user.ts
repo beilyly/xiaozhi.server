@@ -1,5 +1,5 @@
 import { http } from './request'
-import api from './api'
+import api from './api.ts'
 import type { User, UserQueryParams, UpdateUserParams } from '@/types/user'
 import type { LoginResponse } from '@/store/user'
 

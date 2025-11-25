@@ -1,5 +1,5 @@
 import { http } from './request'
-import api from './api'
+import api from './api.ts'
 import type { PromptTemplate, TemplateQuery } from '@/types/template'
 
 export function queryTemplates(params: Partial<TemplateQuery>) {
