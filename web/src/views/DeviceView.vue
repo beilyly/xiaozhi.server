@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useTable } from '@/composables/useTable'
 import { useInlineEdit } from '@/composables/useInlineEdit'
@@ -13,6 +14,7 @@ import type { Device, DeviceQueryParams, Role } from '@/types/device'
 import type { TablePaginationConfig } from 'ant-design-vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const loadingStore = useLoadingStore()
 
 // 表格和分页
@@ -164,7 +166,7 @@ const columns = computed(() => [
   {
     title: t('table.action'),
     dataIndex: 'operation',
-    width: 150,
+    width: 220,
     align: 'center',
     fixed: 'right',
   },
@@ -350,6 +352,37 @@ function getRoleName(roleId?: number) {
   if (!roleId) return ''
   const role = roleItems.value.find((r) => r.roleId === roleId)
   return role ? role.roleName : `角色ID:${roleId}`
+}
+
+/**
+ * 发送留言到指定设备
+ */
+function handleSendMessage(device: Device) {
+  try {
+    // 验证设备信息
+    if (!device || !device.deviceId) {
+      message.error(t('device.deviceInfoIncomplete'))
+      return
+    }
+    
+    // 将设备信息存储到sessionStorage，供聊天页面使用
+    const deviceInfo = {
+      deviceId: device.deviceId,
+      deviceName: device.deviceName || device.deviceId,
+      roleId: device.roleId,
+      roleName: device.roleName
+    }
+    
+    sessionStorage.setItem('targetDevice', JSON.stringify(deviceInfo))
+    
+    // 跳转到聊天页面
+    router.push('/chat')
+    
+    message.success(t('device.sendMessageSuccess', { name: deviceInfo.deviceName }))
+  } catch (error) {
+    console.error('发送留言失败:', error)
+    message.error(t('device.sendMessageFailed'))
+  }
 }
 
 // 处理分页变化
@@ -559,7 +592,13 @@ fetchData()
               @edit="() => handleEdit(record.deviceId)"
               @view="() => handleEditWithDialog(record)"
               @delete="() => handleDeleteDevice(record)"
-            />
+            >
+              <template #actions="{ record }">
+                <a @click="() => handleSendMessage(record)" style="color: #1890ff">
+                  {{ t('device.sendMessage') }}
+                </a>
+              </template>
+            </TableActionButtons>
           </template>
         </template>
       </a-table>

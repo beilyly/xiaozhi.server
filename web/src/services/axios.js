@@ -2,8 +2,15 @@ import axios from "axios";
 const qs = window.Qs;
 import { message } from "ant-design-vue";
 
-// 设置axios的基础URL，根据环境变量
-axios.defaults.baseURL = process.env.BASE_API;
+// Vite 环境变量适配（替代 process.env）
+const env = (typeof import.meta !== 'undefined' && import.meta.env) || {};
+const NODE_ENV = env.MODE || env.VITE_NODE_ENV || 'development';
+const BASE_API = env.VITE_API_BASE || '';
+const BACKEND_URL = env.VITE_BACKEND_URL || 'http://localhost:8091';
+const BASE_URL = env.BASE_URL || '/';
+
+// 设置axios的基础URL（在 Vite 中使用 import.meta.env）
+axios.defaults.baseURL = BASE_API;
 // 设置携带凭证
 axios.defaults.withCredentials = true;
 
@@ -21,10 +28,10 @@ export const getResourceUrl = (path) => {
   }
   
   // 开发环境下，需要使用完整的后端地址
-  if (process.env.NODE_ENV === 'development') {
+  if (NODE_ENV === 'development') {
     // 开发环境下，我们需要指定后端地址
-    // 如果BASE_API为空，则使用默认的localhost:8091
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8091';
+    // 如果未配置则使用默认的 localhost:8091
+    const backendUrl = BACKEND_URL;
     
     // 移除开头的斜杠，因为我们要将完整的URL传给组件
     if (path.startsWith('/')) {
@@ -143,7 +150,7 @@ function commonResponse(data, resolve) {
       key,
       onClose: () => {
         // 使用环境变量中的BASE_URL，而不是硬编码的URL
-        window.location.href = process.env.BASE_URL;
+        window.location.href = BASE_URL;
       }
     });
   } else {
@@ -160,7 +167,7 @@ function rejectResponse(e, reject) {
       key,
       onClose: () => {
         // 使用环境变量中的BASE_URL，而不是硬编码的URL
-        window.location.href = process.env.BASE_URL;
+        window.location.href = BASE_URL;
       }
     });
   } else {

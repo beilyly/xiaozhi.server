@@ -144,6 +144,17 @@ export default {
     audioSizeError: '音频文件不能超过10MB',
     audioProcessFailed: '处理音频失败',
   },
+  chat: {
+    deviceTitle: '设备留言',
+    deviceTitleWithName: '与 {name} 的对话',
+    inputPlaceholder: '请选择设备后再发送消息',
+    inputPlaceholderWithName: '向 {name} 发送消息...',
+    emptyText: '暂无设备信息，无法发送留言',
+    emptyTextWithName: '开始与 {name} 的对话',
+    switchToDeviceSuccess: '已切换到设备 {name} 的留言模式',
+    sendSuccess: '消息发送成功',
+    sendFailedRetry: '消息发送失败，请重试',
+  },
 
   upload: {
     selectFile: '选择文件',
@@ -293,6 +304,10 @@ export default {
     bindRole: '绑定角色',
     confirmClearMemory: '确定要清除该设备的所有对话记忆吗？此操作不可恢复。',
     clearMemory: '清除记忆',
+    sendMessage: '发送留言',
+    sendMessageSuccess: '正在跳转到与设备 {name} 的对话页面',
+    sendMessageFailed: '发送留言失败，请重试',
+    deviceInfoIncomplete: '设备信息不完整，无法发送留言',
   },
 
   role: {

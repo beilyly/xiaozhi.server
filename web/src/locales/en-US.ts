@@ -144,6 +144,17 @@ export default {
     audioSizeError: 'Audio file cannot exceed 10MB',
     audioProcessFailed: 'Failed to process audio',
   },
+  chat: {
+    deviceTitle: 'Device Message',
+    deviceTitleWithName: 'Chat with {name}',
+    inputPlaceholder: 'Please select a device before sending a message',
+    inputPlaceholderWithName: 'Send a message to {name}...',
+    emptyText: 'No device information, unable to send message',
+    emptyTextWithName: 'Start a conversation with {name}',
+    switchToDeviceSuccess: 'Switched to device {name} message mode',
+    sendSuccess: 'Message sent successfully',
+    sendFailedRetry: 'Failed to send message, please try again',
+  },
 
   upload: {
     selectFile: 'Select File',
@@ -293,6 +304,10 @@ export default {
     bindRole: 'Bind Role',
     confirmClearMemory: 'Are you sure to clear all conversation memory for this device? This operation cannot be undone.',
     clearMemory: 'Clear Memory',
+    sendMessage: 'Send Message',
+    sendMessageSuccess: 'Redirecting to conversation page with device {name}',
+    sendMessageFailed: 'Failed to send message, please try again',
+    deviceInfoIncomplete: 'Device information is incomplete, unable to send message',
   },
 
   role: {

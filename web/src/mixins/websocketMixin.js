@@ -7,6 +7,7 @@ import {
   connectToServer,
   isWebSocketConnected
 } from '@/services/websocketService'
+import store from '@/store/index.js'
 
 // 全局标记，确保只有一个组件监听页面可见性变化
 let visibilityListenerActive = false
@@ -25,19 +26,19 @@ export default {
   computed: {
     // 统一的WebSocket状态获取
     wsIsConnected() {
-      return this.$store.getters.WS_IS_CONNECTED
+      return store.getters.WS_IS_CONNECTED
     },
     
     wsConnectionStatus() {
-      return this.$store.getters.WS_CONNECTION_STATUS
+      return store.getters.WS_CONNECTION_STATUS
     },
     
     wsServerConfig() {
-      return this.$store.getters.WS_SERVER_CONFIG
+      return store.getters.WS_SERVER_CONFIG
     },
     
     wsAutoConnect() {
-      return this.$store.getters.WS_AUTO_CONNECT
+      return store.getters.WS_AUTO_CONNECT
     }
   },
   
@@ -98,13 +99,13 @@ export default {
       
       const config = this.wsServerConfig
       const autoConnect = this.wsAutoConnect
-      const userInfo = this.$store.getters.USER_INFO
+      const userInfo = store.getters.USER_INFO
       
       // 检查是否满足自动连接条件
       if (userInfo && autoConnect && config && config.url) {
         try {
           console.log('自动连接WebSocket...')
-          const success = await this.$store.dispatch('WS_CONNECT')
+          const success = await store.dispatch('WS_CONNECT')
           if (success) {
             console.log('自动连接成功')
           }
@@ -131,7 +132,7 @@ export default {
     // 统一的连接方法 - 带消息提示
     async connectWebSocket() {
       try {
-        const success = await this.$store.dispatch('WS_CONNECT')
+        const success = await store.dispatch('WS_CONNECT')
         if (success) {
           this.$message.success('已连接到服务器')
         } else {
@@ -147,7 +148,7 @@ export default {
     // 统一的断开连接方法
     async disconnectWebSocket() {
       try {
-        await this.$store.dispatch('WS_DISCONNECT')
+        await store.dispatch('WS_DISCONNECT')
         this.$message.info('已断开连接')
         return true
       } catch (error) {
@@ -159,7 +160,7 @@ export default {
     // 安静的自动连接方法（不显示过多消息提示）
     async quietConnectWebSocket() {
       try {
-        const success = await this.$store.dispatch('WS_CONNECT')
+        const success = await store.dispatch('WS_CONNECT')
         return success
       } catch (error) {
         console.error('自动连接失败:', error)

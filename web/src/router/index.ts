@@ -96,6 +96,18 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'chat',
+        name: 'chat',
+        component: () => import('../views/chat/Chat.vue'),
+        meta: {
+          title: 'router.title.chat',
+          icon: 'MessageOutlined',
+          requiresAuth: true,
+          // 聊天页面主要通过业务跳转进入，不放在主菜单中
+          hideInMenu: true,
+        },
+      },
+      {
         path: 'role',
         name: 'role',
         component: () => import('../views/RoleView.vue'),
