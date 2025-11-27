@@ -29,6 +29,7 @@ import com.xiaozhi.utils.CmsUtils;
 import com.xiaozhi.utils.JsonUtil;
 
 import ch.qos.logback.core.util.StringUtil;
+import com.xiaozhi.communication.server.mqtt.MqttProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -38,9 +39,9 @@ import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 设备管理
- * 
+ *
  * @author Joey
- * 
+ *
  */
 
 @RestController
@@ -60,11 +61,14 @@ public class DeviceController extends BaseController {
     @Resource
     private CmsUtils cmsUtils;
 
+    @Resource
+    private MqttProperties mqttProperties;
+
     @Value("${xiaozhi.communication.protocol:both}")
     private String communicationProtocol;
     /**
      * 设备查询
-     * 
+     *
      * @param device
      * @return deviceList
      */
@@ -87,7 +91,7 @@ public class DeviceController extends BaseController {
 
     /**
      * 添加设备
-     * 
+     *
      * @param code
      */
     @PostMapping("/add")
@@ -129,7 +133,7 @@ public class DeviceController extends BaseController {
 
     /**
      * 设备信息更新
-     * 
+     *
      * @param device
      * @return
      */
@@ -149,7 +153,7 @@ public class DeviceController extends BaseController {
 
     /**
      * 删除设备
-     * 
+     *
      * @param device
      * @return
      */
@@ -288,13 +292,28 @@ public class DeviceController extends BaseController {
                 }
             } else {
                 // 设备已绑定，设置连接及认证信息
-                if (communicationProtocol.equals("websocket")) {
-                    // 设置WebSocket连接信息.
-                    String websocketToken = "";//deviceService.generateToken(deviceId);
+
+
+
+                if ("websocket".equalsIgnoreCase(communicationProtocol)) {
+                    String websocketToken = "";
                     Map<String, Object> websocketData = new HashMap<>();
                     websocketData.put("url", cmsUtils.getWebsocketAddress());
                     websocketData.put("token", websocketToken);
                     responseData.put("websocket", websocketData);
+                } else if ("mqtt".equalsIgnoreCase(communicationProtocol)) {
+                    Map<String, Object> mqttData = new HashMap<>();
+                    mqttData.put("endpoint", mqttProperties.resolveExternalEndpoint(cmsUtils));
+                    mqttData.put("client_id", deviceId);
+                    if (StringUtils.isNotBlank(mqttProperties.getUsername())) {
+                        mqttData.put("username", mqttProperties.getUsername());
+                    }
+                    if (StringUtils.isNotBlank(mqttProperties.getPassword())) {
+                        mqttData.put("password", mqttProperties.getPassword());
+                    }
+                    mqttData.put("keepalive", mqttProperties.getKeepalive());
+                    mqttData.put("publish_topic", mqttProperties.buildTopic(deviceId));
+                    responseData.put("mqtt", mqttData);
                 }
                 // 设备已绑定，更新设备状态和信息
                 SysDevice boundDevice = queryDevice.get(0);
@@ -317,7 +336,7 @@ public class DeviceController extends BaseController {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setContentLength(responseBytes.length); // 明确设置Content-Length
-
+            logger.info("response:{}", responseData);
             return new ResponseEntity<>(responseBytes, headers, HttpStatus.OK);
         } catch (Exception e) {
             logger.error("处理OTA请求失败", e);

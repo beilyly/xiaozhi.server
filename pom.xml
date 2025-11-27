@@ -282,6 +282,11 @@
             <artifactId>netty-all</artifactId>
             <version>4.1.110.Final</version>
         </dependency>
+        <dependency>
+            <groupId>io.moquette</groupId>
+            <artifactId>moquette-broker</artifactId>
+            <version>0.17</version>
+        </dependency>
     </dependencies>
 
     <build>

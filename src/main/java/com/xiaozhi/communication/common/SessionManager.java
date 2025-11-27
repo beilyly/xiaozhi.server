@@ -186,7 +186,10 @@ public class SessionManager {
      * @param sessionId 会话ID
      */
     public void removeSession(String sessionId){
-        sessions.remove(sessionId);
+        ChatSession removed = sessions.remove(sessionId);
+        if (removed != null && removed.getSysDevice() != null) {
+            deviceSessions.remove(removed.getSysDevice().getDeviceId(), removed);
+        }
     }
 
     /**
@@ -212,9 +215,7 @@ public class SessionManager {
             return;
         }
         try {
-            if(chatSession instanceof WebSocketSession){
-                removeSession(chatSession.getSessionId());
-            }
+            removeSession(chatSession.getSessionId());
             // 关闭会话
             if(chatSession.isAudioChannelOpen()){
                 chatSession.close();
