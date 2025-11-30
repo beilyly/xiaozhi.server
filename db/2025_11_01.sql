@@ -54,12 +54,13 @@ INSERT INTO `xiaozhi`.`sys_permission` (`parentId`, `name`, `permissionKey`, `pe
 (NULL, 'Dashboard', 'system:dashboard', 'menu', '/dashboard', 'page/Dashboard', 'dashboard', 1, '1', '1'),
 (NULL, '用户管理', 'system:user', 'menu', '/user', 'page/User', 'team', 2, '1', '1'),
 (NULL, '设备管理', 'system:device', 'menu', '/device', 'page/Device', 'robot', 3, '1', '1'),
-(NULL, '智能体', 'system:agents', 'menu', '/agents', 'page/user/Agents', 'robot', 4, '1', '1'),
-(NULL, '对话管理', 'system:message', 'menu', '/message', 'page/Message', 'message', 5, '1', '1'),
-(NULL, '角色配置', 'system:role', 'menu', '/role', 'page/Role', 'user-add', 6, '1', '1'),
-(NULL, '提示词模板管理', 'system:prompt-template', 'menu', '/prompt-template', 'page/PromptTemplate', 'snippets', 7, '0', '1'),
-(NULL, '配置管理', 'system:config', 'menu', '/config', 'common/PageView', 'setting', 8, '1', '1'),
-(NULL, '设置', 'system:setting', 'menu', '/setting', 'common/PageView', 'setting', 9, '1', '1');
+(NULL, '固件管理', 'system:firmware', 'menu', '/firmware', 'page/Firmware', 'cloud-upload', 4, '1', '1'),
+(NULL, '智能体', 'system:agents', 'menu', '/agents', 'page/user/Agents', 'robot', 5, '1', '1'),
+(NULL, '对话管理', 'system:message', 'menu', '/message', 'page/Message', 'message', 6, '1', '1'),
+(NULL, '角色配置', 'system:role', 'menu', '/role', 'page/Role', 'user-add', 7, '1', '1'),
+(NULL, '提示词模板管理', 'system:prompt-template', 'menu', '/prompt-template', 'page/PromptTemplate', 'snippets', 8, '0', '1'),
+(NULL, '配置管理', 'system:config', 'menu', '/config', 'common/PageView', 'setting', 9, '1', '1'),
+(NULL, '设置', 'system:setting', 'menu', '/setting', 'common/PageView', 'setting', 10, '1', '1');
 
 -- 配置管理子菜单
 INSERT INTO `xiaozhi`.`sys_permission` (`parentId`, `name`, `permissionKey`, `permissionType`, `path`, `component`, `icon`, `sort`, `visible`, `status`) VALUES

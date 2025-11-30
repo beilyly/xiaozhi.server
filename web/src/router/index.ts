@@ -85,6 +85,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'firmware',
+        name: 'firmware',
+        component: () => import('../views/page/Firmware.vue'),
+        meta: {
+          title: 'router.title.firmware',
+          icon: 'CloudUploadOutlined',
+          requiresAuth: true,
+          permission: 'system:firmware',
+        },
+      },
+      {
         path: 'message',
         name: 'message',
         component: () => import('../views/MessageView.vue'),

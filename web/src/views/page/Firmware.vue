@@ -112,34 +112,34 @@
           style="width: 100%"
           :empty-text="loading ? '加载中...' : '暂无数据'">
           <el-table-column prop="fileName" label="文件名" min-width="200">
-            <template slot-scope="scope">
+            <template #default="scope">
               <i class="el-icon-document"></i>
-              <span style="margin-left: 8px">{{ scope.row.fileName }}</span>
+              <span style="margin-left: 8px">{{ scope?.row?.fileName }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="size" label="文件大小" width="120">
-            <template slot-scope="scope">
-              {{ formatFileSize(scope.row.size) }}
+            <template #default="scope">
+              {{ formatFileSize(scope?.row?.size) }}
             </template>
           </el-table-column>
           <el-table-column prop="modifyTime" label="上传时间" width="180">
-            <template slot-scope="scope">
-              {{ formatDate(scope.row.modifyTime) }}
+            <template #default="scope">
+              {{ formatDate(scope?.row?.modifyTime) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="200">
-            <template slot-scope="scope">
+            <template #default="scope">
               <el-button
                 type="primary"
                 size="mini"
-                @click="downloadFile(scope.row)">
+                @click="scope?.row && downloadFile(scope.row)">
                 <i class="el-icon-download"></i> 下载
               </el-button>
               <el-button
                 type="danger"
                 size="mini"
-                @click="deleteFile(scope.row)"
-                :loading="scope.row.deleting">
+                @click="scope?.row && deleteFile(scope.row)"
+                :loading="scope?.row?.deleting">
                 <i class="el-icon-delete"></i> 删除
               </el-button>
             </template>

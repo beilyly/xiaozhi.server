@@ -47,6 +47,11 @@ export default {
     update: '/config/update',
     getModels: '/config/getModels',
   },
+  firmware: {
+    list: '/api/file/firmware/list',
+    upload: '/api/file/firmware/upload',
+    delete: '/api/file/firmware',
+  },
   upload: '/api/file/upload',
 }
 
