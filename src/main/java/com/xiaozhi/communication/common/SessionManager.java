@@ -1,5 +1,6 @@
 package com.xiaozhi.communication.common;
 
+import com.xiaozhi.communication.server.mqtt.MqttSession;
 import com.xiaozhi.communication.server.websocket.WebSocketSession;
 import com.xiaozhi.dialogue.llm.memory.Conversation;
 import com.xiaozhi.dialogue.llm.tool.ToolsSessionHolder;
@@ -50,6 +51,12 @@ public class SessionManager {
 
     // 用于存储设备ID到会话的映射，与sessions保持同步
     private final ConcurrentHashMap<String, ChatSession> deviceSessions = new ConcurrentHashMap<>();
+
+    // 用于存储假移除的会话（ESP32/MQTT会话，保持连接但不处理请求）
+    private final ConcurrentHashMap<String, ChatSession> removedSessions = new ConcurrentHashMap<>();
+    
+    // 用于存储假移除会话的设备ID映射
+    private final ConcurrentHashMap<String, ChatSession> removedDeviceSessions = new ConcurrentHashMap<>();
 
     // 存储验证码生成状态
     private final ConcurrentHashMap<String, Boolean> captchaState = new ConcurrentHashMap<>();
@@ -169,6 +176,14 @@ public class SessionManager {
     }
 
     public void registerSession(String sessionId, ChatSession chatSession, String deviceId) {
+        // 如果该设备之前有假移除的会话，先清理
+        ChatSession removedSession = removedDeviceSessions.remove(deviceId);
+        if (removedSession != null) {
+            removedSessions.remove(removedSession.getSessionId());
+            logger.info("恢复ESP32会话 - DeviceId: {}, 旧SessionId: {}, 新SessionId: {}", 
+                    deviceId, removedSession.getSessionId(), sessionId);
+        }
+        
         sessions.put(sessionId, chatSession);
         deviceSessions.put(deviceId, chatSession);
         logger.info("会话已注册 - SessionId: {}  SessionType: {}", sessionId, chatSession.getClass().getSimpleName());
@@ -182,13 +197,29 @@ public class SessionManager {
 
     /**
      * 关闭并清理WebSocket会话
+     * 对于ESP32/MQTT会话，采用假移除策略：保持连接但不处理请求，直到下次连接
      *
      * @param sessionId 会话ID
      */
     public void removeSession(String sessionId){
         ChatSession removed = sessions.remove(sessionId);
-        if (removed != null && removed.getSysDevice() != null) {
-            deviceSessions.remove(removed.getSysDevice().getDeviceId(), removed);
+        if (removed != null) {
+            // 如果是MQTT会话（ESP32设备），采用假移除策略
+            if (removed instanceof MqttSession) {
+                // 移到removedSessions，保持连接但不处理请求
+                removedSessions.put(sessionId, removed);
+                if (removed.getSysDevice() != null) {
+                    String deviceId = removed.getSysDevice().getDeviceId();
+                    deviceSessions.remove(deviceId, removed);
+                    removedDeviceSessions.put(deviceId, removed);
+                    logger.info("ESP32会话假移除 - SessionId: {}, DeviceId: {}, 保持连接但不处理请求", sessionId, deviceId);
+                }
+            } else {
+                // 非MQTT会话，正常移除
+                if (removed.getSysDevice() != null) {
+                    deviceSessions.remove(removed.getSysDevice().getDeviceId(), removed);
+                }
+            }
         }
     }
 
@@ -319,17 +350,34 @@ public class SessionManager {
     public ChatSession getSession(String sessionId) {
         return sessions.get(sessionId);
     }
-    /*
-     * 获取会话
+
+    /**
+     * 检查会话是否被假移除
+     *
+     * @param sessionId 会话ID
+     * @return 如果会话被假移除返回true，否则返回false
+     */
+    public boolean isSessionRemoved(String sessionId) {
+        return removedSessions.containsKey(sessionId);
+    }
+    /**
+     * 获取会话（通过设备ID）
+     * 同时查找正常会话和假移除的会话，用于服务器主动发送消息
      *
      * @param deviceId 设备ID
-     * @return 会话ID
+     * @return 会话，优先返回正常会话，如果没有则返回假移除的会话
      */
     public ChatSession getSessionByDeviceId(String deviceId) {
         if (deviceId == null){
             return null;
         }
-        return deviceSessions.get(deviceId);
+        // 优先查找正常会话
+        ChatSession session = deviceSessions.get(deviceId);
+        if (session != null) {
+            return session;
+        }
+        // 如果没有正常会话，查找假移除的会话（用于服务器主动发送消息）
+        return removedDeviceSessions.get(deviceId);
     }
 
     /**

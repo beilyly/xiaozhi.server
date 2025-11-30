@@ -143,19 +143,25 @@ public class MqttMessageDispatcher {
                     (sessionId, data) -> messageHandler.handleBinaryMessage(sessionId, data));
             session.attachUdpChannel(udpChannel);
 
+            String udpHost = mqttProperties.resolveUdpHost(cmsUtils);
+            if (!StringUtils.hasText(udpHost)) {
+                logger.error("UDP host is not configured for session {}", session.getSessionId());
+                throw new IllegalStateException("UDP host is not configured");
+            }
+
             ObjectNode response = MAPPER.createObjectNode();
             response.put("type", "hello");
             response.put("transport", "udp");
             response.put("session_id", session.getSessionId());
             response.set("audio_params", MAPPER.valueToTree(AudioParams.Opus));
             ObjectNode udp = response.putObject("udp");
-            udp.put("server", mqttProperties.resolveUdpHost(cmsUtils));
+            udp.put("server", udpHost);
             udp.put("port", udpChannel.getLocalPort());
             udp.put("key", udpChannel.getKeyHex());
             udp.put("nonce", udpChannel.getBaseNonceHex());
             session.sendTextMessage(response.toString());
-            logger.info("Server hello sent over MQTT - sessionId: {}, clientId: {}, topic: {}",
-                    session.getSessionId(), session.getClientId(), session.getTopic());
+            logger.info("Server hello sent over MQTT - sessionId: {}, clientId: {}, topic: {}, udp: {}:{}",
+                    session.getSessionId(), session.getClientId(), session.getTopic(), udpHost, udpChannel.getLocalPort());
 
             HelloFeatures features = hello.getFeatures();
             if (features != null && Boolean.TRUE.equals(features.getMcp())) {

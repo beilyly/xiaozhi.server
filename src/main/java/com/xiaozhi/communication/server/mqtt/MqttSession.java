@@ -58,16 +58,19 @@ public class MqttSession extends ChatSession {
 
     @Override
     public void close() {
-        if (open.compareAndSet(true, false)) {
-            detachUdpChannel();
-            mqttServer.disconnect(clientId);
-        }
+        markDisconnected();
+        //让客户端主动断开
+//        if (open.compareAndSet(true, false)) {
+//            detachUdpChannel();
+//            mqttServer.disconnect(clientId);
+//        }
     }
 
     public void markDisconnected() {
-        if (open.compareAndSet(true, false)) {
-            detachUdpChannel();
-        }
+
+//        if (open.compareAndSet(true, false)) {
+//            detachUdpChannel();
+//        }
     }
 
     @Override
@@ -76,6 +79,8 @@ public class MqttSession extends ChatSession {
             logger.debug("MQTT session already closed, skip text message");
             return;
         }
+
+        logger.info("sendTextMessage - sessionId: {}, message: {}", getSessionId(), message);
         mqttServer.publish(topic, message.getBytes(StandardCharsets.UTF_8));
     }
 
