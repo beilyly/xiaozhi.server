@@ -135,13 +135,18 @@ public class MqttMessageDispatcher {
     private void handleHelloMessage(MqttSession session, HelloMessage hello) {
         try {
             logger.info("Handle HelloMessage - sessionId: {}, clientId: {}", session.getSessionId(), session.getClientId());
-
-            UdpAudioChannel udpChannel = UdpAudioChannel.create(
-                    session.getSessionId(),
-                    mqttProperties,
-                    sessionManager,
-                    (sessionId, data) -> messageHandler.handleBinaryMessage(sessionId, data));
-            session.attachUdpChannel(udpChannel);
+            sessionManager.registerSession(session.getSessionId(), session, session.getClientId());
+            // 如果之前有假移除的会话且 UDP 通道仍可用，则在 registerSession 中已复用；
+            // 只有在不存在可用 UDP 通道时才创建新的。
+            UdpAudioChannel udpChannel = session.getUdpChannel();
+            if (udpChannel == null || !udpChannel.isReady()) {
+                udpChannel = UdpAudioChannel.create(
+                        session.getSessionId(),
+                        mqttProperties,
+                        sessionManager,
+                        (sessionId, data) -> messageHandler.handleBinaryMessage(sessionId, data));
+                session.attachUdpChannel(udpChannel);
+            }
 
             String udpHost = mqttProperties.resolveUdpHost(cmsUtils);
             if (!StringUtils.hasText(udpHost)) {

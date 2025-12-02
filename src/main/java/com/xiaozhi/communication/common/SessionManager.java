@@ -54,7 +54,7 @@ public class SessionManager {
 
     // 用于存储假移除的会话（ESP32/MQTT会话，保持连接但不处理请求）
     private final ConcurrentHashMap<String, ChatSession> removedSessions = new ConcurrentHashMap<>();
-    
+
     // 用于存储假移除会话的设备ID映射
     private final ConcurrentHashMap<String, ChatSession> removedDeviceSessions = new ConcurrentHashMap<>();
 
@@ -133,7 +133,9 @@ public class SessionManager {
         Thread.startVirtualThread(() -> {
             Instant now = Instant.now();
             sessions.values().forEach(session -> {
-                if(session instanceof  WebSocketSession || session.isAudioChannelOpen()) {
+                // 检查所有会话类型：WebSocket 会话或 MQTT 会话（有音频通道打开的）
+                if(session instanceof WebSocketSession ||
+                   session.isAudioChannelOpen()) {
                     Instant lastActivity = session.getLastActivityTime();
                     if (lastActivity != null) {
                         Duration inactiveDuration = Duration.between(lastActivity, now);
@@ -175,18 +177,32 @@ public class SessionManager {
         applicationContext.publishEvent(new ChatSessionOpenEvent(chatSession));
     }
 
+
+
     public void registerSession(String sessionId, ChatSession chatSession, String deviceId) {
-        // 如果该设备之前有假移除的会话，先清理
+        // 如果该设备之前有假移除的会话，先清理并尝试复用 UDP 通道
         ChatSession removedSession = removedDeviceSessions.remove(deviceId);
         if (removedSession != null) {
             removedSessions.remove(removedSession.getSessionId());
-            logger.info("恢复ESP32会话 - DeviceId: {}, 旧SessionId: {}, 新SessionId: {}", 
+            logger.info("恢复ESP32会话 - DeviceId: {}, 旧SessionId: {}, 新SessionId: {}",
                     deviceId, removedSession.getSessionId(), sessionId);
+
+            // 如果是 MQTT 会话，则尝试从旧会话复用 UDP 通道
+            if (removedSession instanceof com.xiaozhi.communication.server.mqtt.MqttSession oldMqttSession
+                    && chatSession instanceof com.xiaozhi.communication.server.mqtt.MqttSession newMqttSession) {
+                boolean reused = newMqttSession.reuseUdpChannelFrom(oldMqttSession);
+                if (reused) {
+                    logger.info("复用ESP32 UDP通道 - DeviceId: {}, SessionId: {}",
+                            deviceId, newMqttSession.getSessionId());
+                }
+            }
         }
-        
-        sessions.put(sessionId, chatSession);
+
+        // 这里使用会话当前的 sessionId，兼容可能在复用时被旧会话覆盖的场景
+        String actualSessionId = chatSession.getSessionId();
+        sessions.put(actualSessionId, chatSession);
         deviceSessions.put(deviceId, chatSession);
-        logger.info("会话已注册 - SessionId: {}  SessionType: {}", sessionId, chatSession.getClass().getSimpleName());
+        logger.info("会话已注册 - SessionId: {}  SessionType: {}", actualSessionId, chatSession.getClass().getSimpleName());
         // 发布设备重连事件，让DeviceMessageQueueService处理待发送消息
         if (chatSession.getSysDevice() != null) {
             // 同时更新设备ID映射

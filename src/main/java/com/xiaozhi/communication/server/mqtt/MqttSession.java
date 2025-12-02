@@ -46,6 +46,35 @@ public class MqttSession extends ChatSession {
         }
     }
 
+    /**
+     * 获取当前会话绑定的 UDP 通道
+     */
+    public UdpAudioChannel getUdpChannel() {
+        return udpChannel;
+    }
+
+    /**
+     * 从旧的 MQTT 会话复用 UDP 通道。
+     * 仅当旧通道存在且仍然可用时才会复用，并同时继承旧会话的 sessionId，
+     * 保证 UDP 通道内的 sessionId 与会话管理中的一致。
+     *
+     * @param oldSession 之前被假移除的会话
+     * @return 是否成功复用 UDP 通道
+     */
+    public boolean reuseUdpChannelFrom(MqttSession oldSession) {
+        if (oldSession == null) {
+            return false;
+        }
+        UdpAudioChannel oldChannel = oldSession.udpChannel;
+        if (oldChannel != null && oldChannel.isReady()) {
+            // 继承旧会话的 UDP 通道和 sessionId
+            this.udpChannel = oldChannel;
+            this.sessionId = oldSession.getSessionId();
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public boolean isOpen() {
         return open.get();
