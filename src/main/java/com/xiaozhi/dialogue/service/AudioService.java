@@ -124,6 +124,15 @@ public class AudioService {
             // 延迟500ms后发送stop消息，确保设备完成音频播放
             CompletableFuture<Void> sendTtsMessageFuture = CompletableFuture.runAsync(() -> {
                 messageService.sendTtsMessage(session, null, "stop");
+                // 如果本轮对话结束后需要关闭会话，则同时发送goodbye控制消息
+                if (sessionManager.isCloseAfterChat(sessionId)) {
+                    try {
+                        String goodbyeJson = String.format("{\"type\":\"goodbye\",\"session_id\":\"%s\"}", sessionId);
+                        messageService.sendTextMessage(session, goodbyeJson);
+                    } catch (Exception ex) {
+                        logger.warn("发送goodbye控制消息失败 - SessionId: {}, error: {}", sessionId, ex.getMessage());
+                    }
+                }
             }, CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS));
             // 检查是否需要关闭会话
             if (sessionManager.isCloseAfterChat(sessionId)) {

@@ -50,17 +50,17 @@ public class DialogueService{
     private static final Logger logger = LoggerFactory.getLogger(DialogueService.class);
     private static final DecimalFormat df = new DecimalFormat("0.000");
     private static final long TIMEOUT_MS = 5000;
-    
+
     // 从配置文件读取TTS相关参数
     @Value("${tts.timeout.ms:10000}")
     private long TTS_TIMEOUT_MS;
-    
+
     @Value("${tts.max.retry.count:1}")
     private int MAX_RETRY_COUNT;
-    
+
     @Value("${tts.retry.delay.ms:1000}")
     private long TTS_RETRY_DELAY_MS;
-    
+
     @Value("${tts.max.concurrent.per.session:3}")
     private int MAX_CONCURRENT_PER_SESSION;
 
@@ -96,10 +96,10 @@ public class DialogueService{
 
     @Resource
     private SysMessageService sysMessageService;
-    
+
     @Resource
     private SysConfigService configService;
-    
+
     @Resource
     private SysRoleService roleService;
 
@@ -110,6 +110,8 @@ public class DialogueService{
     private final Map<String, CopyOnWriteArrayList<Sentence>> sentenceQueue = new ConcurrentHashMap<>();
     private final Map<String, AtomicBoolean> firstSentDone = new ConcurrentHashMap<>();
     private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
+    // 记录连续空识别的次数（按session）
+    private final Map<String, AtomicInteger> emptySttCounters = new ConcurrentHashMap<>();
 
     // 存储每个对话ID的所有模型回复音频路径
     private final Map<Long, Map<Integer, String>> dialogueAudioPaths = new ConcurrentHashMap<>();
@@ -315,7 +317,7 @@ public class DialogueService{
         }
         String sessionId = session.getSessionId();
         try {
-            
+
             SysDevice device = session.getSysDevice();
             // 如果设备未注册或未绑定，忽略音频数据
             if (device == null || ObjectUtils.isEmpty(device.getRoleId())) {
@@ -339,6 +341,7 @@ public class DialogueService{
             switch (vadResult.getStatus()) {
                 case SPEECH_START:
                     // 检测到语音开始
+                    logger.info("VAD检测到语音开始 - SessionId: {}", sessionId);
                     sttStartTimes.put(sessionId, System.currentTimeMillis());
                     if(isDialog(sessionId)){
                         //检测到vad，触发当前语音打断事件
@@ -351,6 +354,7 @@ public class DialogueService{
 
                 case SPEECH_CONTINUE:
                     // 语音继续，发送数据到流式识别
+                    logger.debug("VAD检测到语音持续 - SessionId: {}, isStreaming={}", sessionId, sessionManager.isStreaming(sessionId));
                     if (sessionManager.isStreaming(sessionId)) {
                         sessionManager.sendAudioData(sessionId, vadResult.getProcessedData());
                     }
@@ -358,9 +362,13 @@ public class DialogueService{
 
                 case SPEECH_END:
                     // 语音结束，完成流式识别
+                    logger.info("VAD检测到语音结束 - SessionId: {}, isStreaming={}", sessionId, sessionManager.isStreaming(sessionId));
                     if (sessionManager.isStreaming(sessionId)) {
+                        logger.info("完成音频流 - SessionId: {}", sessionId);
                         sessionManager.completeAudioStream(sessionId);
                         sessionManager.setStreamingState(sessionId, false);
+                    } else {
+                        logger.warn("检测到语音结束但当前未处于流式识别状态 - SessionId: {}", sessionId);
                     }
                     break;
 
@@ -416,10 +424,32 @@ public class DialogueService{
                 final String finalText;
                 if (sessionManager.getAudioStream(sessionId) != null) {
                     finalText = sttService.streamRecognition(sessionManager.getAudioStream(sessionId));
+                    // 注意：此处是在整句流式识别结束后才会返回结果
                     if (!StringUtils.hasText(finalText)) {
+                        // 连续空识别计数
+                        AtomicInteger counter = emptySttCounters.computeIfAbsent(sessionId, k -> new AtomicInteger(0));
+                        int current = counter.incrementAndGet();
+                        logger.info("STT整句识别结果为空，第 {} 次连续空结果 - SessionId: {}", current, sessionId);
+
+                        // 小于3次，仅忽略本轮，不做goodbye
+                        if (current < 3) {
+                            return;
+                        }
+
+                        // 第3次及以上连续空结果，发送goodbye并重置计数
+                        logger.info("STT连续空结果达到阈值({})，结束本轮对话并发送goodbye - SessionId: {}", current, sessionId);
+                        counter.set(0);
+                        sendGoodbyeMessage(session);
                         return;
+                    } else {
+                        // 一旦识别到有效文字，重置空结果计数
+                        AtomicInteger counter = emptySttCounters.get(sessionId);
+                        if (counter != null) {
+                            counter.set(0);
+                        }
                     }
                 } else {
+                    logger.warn("音频流已不存在，无法进行STT识别 - SessionId: {}", sessionId);
                     return;
                 }
 
@@ -560,7 +590,7 @@ public class DialogueService{
         if (emoSentence.getTtsSentence() == null || emoSentence.getTtsSentence().trim().isEmpty()) {
             // 如果只有表情符号，直接标记为准备好但不生成音频
             logger.info("跳过纯表情符号TTS处理 - 序号: {}, 内容: \"{}\"", seq, text);
-            
+
             // 创建句子对象
             Sentence sentence = new Sentence(seq, text, isFirst, isLast);
             sentence.setModelResponseTime(responseTime / 1000.0);
@@ -738,7 +768,7 @@ public class DialogueService{
 
         // 耗时操作需及时更新最后活动时间，避免误判为会话终止
         sessionManager.updateLastActivity(task.getSessionId());
-        
+
         // 如果是首句，设置TTS响应时间
         if (task.isFirst) {
             int ttsResponseTime = (int) (task.sentence.getTtsGenerationTime() * 1000);
@@ -746,7 +776,7 @@ public class DialogueService{
             logger.info("TTS首句响应时间 - SessionId: {}, 响应时间: {}秒",
                     task.sessionId, df.format(task.sentence.getTtsGenerationTime()));
         }
-        
+
         // 记录日志
         logger.info("句子音频生成完成 - 序号: {}, 对话ID: {}, 模型响应: {}秒, 语音生成: {}秒, 内容: \"{}\"",
                 task.sentence.getSeq(), task.sentence.getAssistantTimeMillis(),
@@ -765,7 +795,7 @@ public class DialogueService{
 
         // 如果是首句，需要标记首句处理完成
         if (task.isFirst) {
-            
+
             if(firstSentDone.get(task.sessionId) != null) {
                 firstSentDone.get(task.sessionId).set(true);
             } else {
@@ -794,20 +824,20 @@ public class DialogueService{
         if (task.retryCount <= MAX_RETRY_COUNT) {
             // 创建新的任务对象而不是重用原对象，避免数据污染
             TtsTask retryTask = new TtsTask(
-                task.session, 
-                task.sessionId, 
-                task.sentence, 
-                task.emoSentence, 
-                task.isFirst, 
-                task.isLast, 
-                task.ttsConfig, 
+                task.session,
+                task.sessionId,
+                task.sentence,
+                task.emoSentence,
+                task.isFirst,
+                task.isLast,
+                task.ttsConfig,
                 task.voiceName,
                 task.ttsPitch,
                 task.ttsSpeed
             );
             retryTask.retryCount = task.retryCount;
             retryTask.isRetry = true;
-            
+
             logger.info("TTS任务重试 - 序号: {}, 重试次数: {}/{}, 内容: \"{}\", 原因: {}",
                     task.sentence.getSeq(), task.retryCount, MAX_RETRY_COUNT, task.sentence.getText(), reason);
 
@@ -1021,7 +1051,7 @@ public class DialogueService{
     /**
      * 处理文本消息交互
      * 如果指定了输出文本，则用指定的文本生成语音
-     * 
+     *
      * @param session
      * @param inputText    输入文本
      * @param textConsumer 具体处理输入文本，传入 dialogId
@@ -1149,7 +1179,7 @@ public class DialogueService{
                 taskQueue.clear();
                 logger.info("已清空TTS任务队列 - SessionId: {}", sessionId);
             }
-            
+
             // 释放所有信号量许可，确保正在进行的TTS任务能够完成
             Semaphore semaphore = sessionSemaphores.get(sessionId);
             if (semaphore != null) {

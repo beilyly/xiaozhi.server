@@ -146,6 +146,7 @@ public class VoskSttService implements SttService {
         StringBuilder finalResult = new StringBuilder();
 
         // 订阅Sink并将数据放入队列
+        logger.info("Vosk流式识别开始订阅音频流");
         audioSink.asFlux().subscribe(
                 data -> audioQueue.offer(data),
                 error -> {
@@ -201,6 +202,7 @@ public class VoskSttService implements SttService {
                         finalResult.append(text);
                     }
 
+                    logger.info("Vosk流式识别结束，累计结果长度: {}", finalResult.length());
                 } catch (Exception e) {
                     logger.error("Vosk流式识别过程中发生错误", e);
                 }
@@ -210,6 +212,7 @@ public class VoskSttService implements SttService {
             try {
                 virtualThread.join(90000); // 90秒超时
                 if (virtualThread.isAlive()) {
+                    logger.warn("Vosk流式识别超时未完成，准备中断识别线程");
                     virtualThread.interrupt(); // 中断线程
                 }
             } catch (InterruptedException e) {

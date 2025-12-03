@@ -130,12 +130,12 @@ public class SessionManager {
      * 使用虚拟线程实现异步处理
      */
     private void checkInactiveSessions() {
+        logger.debug("checkInactiveSessions定时任务触发，当前会话数: {}", sessions.size());
         Thread.startVirtualThread(() -> {
             Instant now = Instant.now();
             sessions.values().forEach(session -> {
                 // 检查所有会话类型：WebSocket 会话或 MQTT 会话（有音频通道打开的）
-                if(session instanceof WebSocketSession ||
-                   session.isAudioChannelOpen()) {
+                if(session.isAudioChannelOpen()) {
                     Instant lastActivity = session.getLastActivityTime();
                     if (lastActivity != null) {
                         Duration inactiveDuration = Duration.between(lastActivity, now);
@@ -528,6 +528,7 @@ public class SessionManager {
         ChatSession chatSession = sessions.get(sessionId);
         if (chatSession != null) {
             chatSession.setStreamingState(isStreaming);
+            logger.info("更新流式识别状态 - SessionId: {}, isStreaming={}", sessionId, isStreaming);
         }
         updateLastActivity(sessionId); // 更新活动时间
     }
@@ -556,6 +557,7 @@ public class SessionManager {
         ChatSession chatSession = sessions.get(sessionId);
         if (chatSession != null) {
             chatSession.setAudioSinks(sink);
+            logger.info("创建音频流 - SessionId: {}", sessionId);
         }
     }
 
@@ -583,6 +585,7 @@ public class SessionManager {
         Sinks.Many<byte[]> sink = getAudioStream(sessionId);
         if (sink != null) {
             sink.tryEmitNext(data);
+            logger.debug("发送音频数据到音频流 - SessionId: {}, length={}", sessionId, data != null ? data.length : 0);
         }
     }
 
@@ -595,6 +598,7 @@ public class SessionManager {
         Sinks.Many<byte[]> sink = getAudioStream(sessionId);
         if (sink != null) {
             sink.tryEmitComplete();
+            logger.info("完成音频流 - SessionId: {}", sessionId);
         }
     }
 
@@ -609,6 +613,7 @@ public class SessionManager {
         ChatSession chatSession = sessions.get(sessionId);
         if (chatSession != null) {
             chatSession.setAudioSinks(null);
+            logger.info("关闭音频流 - SessionId: {}", sessionId);
         }
     }
 
