@@ -36,6 +36,11 @@ build_and_up() {
   echo ">>> Building $SERVICE ..."
   docker compose -f $COMPOSE_FILE build $SERVICE
 
+  # 先停止并删除可能存在的同名旧容器，避免端口冲突
+  echo ">>> Stopping and removing old containers for $SERVICE (if any)..."
+  docker compose -f $COMPOSE_FILE stop $SERVICE 2>/dev/null || true
+  docker compose -f $COMPOSE_FILE rm -f $SERVICE 2>/dev/null || true
+
   echo ">>> Starting $SERVICE (without touching mysql)..."
   docker compose -f $COMPOSE_FILE up -d --no-deps $SERVICE
 }
