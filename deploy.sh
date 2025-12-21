@@ -49,12 +49,33 @@ prepare_vosk_model() {
   fi
 }
 
+cleanup_port() {
+  PORT=$1
+  echo ">>> Checking for containers using port $PORT..."
+  
+  # 查找所有容器，检查端口映射
+  CONTAINER_IDS=$(docker ps -a --format "{{.ID}} {{.Ports}}" 2>/dev/null | grep -E ":$PORT->|0\.0\.0\.0:$PORT|:::$PORT" | awk '{print $1}' || true)
+  
+  if [ -n "$CONTAINER_IDS" ]; then
+    echo ">>> Found containers using port $PORT, removing them..."
+    for CID in $CONTAINER_IDS; do
+      echo ">>> Stopping and removing container $CID..."
+      docker stop $CID 2>/dev/null || true
+      docker rm -f $CID 2>/dev/null || true
+    done
+  else
+    echo ">>> No containers found using port $PORT"
+  fi
+}
+
 build_and_up() {
   SERVICE=$1
   
   # 如果是 server 服务，准备 Vosk 模型文件
   if [ "$SERVICE" = "server" ]; then
     prepare_vosk_model
+    # 清理占用 8091 端口的容器
+    cleanup_port 8091
   fi
   
   echo ">>> Building $SERVICE ..."
