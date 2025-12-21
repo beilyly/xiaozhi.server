@@ -18,9 +18,7 @@ services:
       start_period: 30s
 
   node:
-    build:
-      context: .
-      dockerfile: Dockerfile-node
+    image: esp32web:4.1
     depends_on:
       mysql:
         condition: service_healthy
