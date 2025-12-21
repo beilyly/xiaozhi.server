@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: Dockerfile-server
       args:
-        - VOSK_MODEL_SIZE=${VOSK_MODEL_SIZE:-small}
+        - VOSK_MODEL_SIZE=${VOSK_MODEL_SIZE:-standard}
       # 添加构建缓存设置
       cache_from:
         - eclipse-temurin:21-jre

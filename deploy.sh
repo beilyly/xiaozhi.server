@@ -33,18 +33,19 @@ git_pull() {
 
 prepare_vosk_model() {
   # 如果 /home/vosk-model-cn-0.22.zip 存在，复制到项目根目录供 Docker 构建使用
-  # 这样可以在构建时使用本地文件，避免每次都要下载
+  # Dockerfile 会自动检测文件是否存在，如果存在就使用，不存在就从网络下载
   if [ -f "/home/vosk-model-cn-0.22.zip" ]; then
     echo ">>> Copying vosk-model-cn-0.22.zip from /home to project root..."
     cp -f /home/vosk-model-cn-0.22.zip ./vosk-model-cn-0.22.zip
-    echo ">>> File copied successfully"
+    echo ">>> File copied successfully, Dockerfile will use local file"
   else
-    echo ">>> /home/vosk-model-cn-0.22.zip not found, will download from network during build"
+    echo ">>> /home/vosk-model-cn-0.22.zip not found"
     # 如果源文件不存在，删除项目根目录中的旧文件（如果有）
     if [ -f "./vosk-model-cn-0.22.zip" ]; then
       echo ">>> Removing old vosk-model-cn-0.22.zip from project root"
       rm -f ./vosk-model-cn-0.22.zip
     fi
+    echo ">>> Dockerfile will download model from network during build"
   fi
 }
 

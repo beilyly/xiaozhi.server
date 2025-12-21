@@ -34,8 +34,9 @@ COPY ./models/silero_vad.onnx /build/models/silero_vad.onnx
 
 # 尝试复制 Vosk 模型文件（如果存在于构建上下文中）
 # 注意：deploy.sh 会在构建前将 /home/vosk-model-cn-0.22.zip 复制到项目根目录
-# 如果文件不存在，此 COPY 会失败，构建将失败
-# 确保 deploy.sh 已正确复制文件，或者文件已在项目根目录
+# 如果文件存在，COPY 它；如果不存在，此 COPY 会失败，构建将失败
+# 如果用户希望从网络下载，应该不复制文件，并且确保 VOSK_MODEL_SIZE=small
+# 或者完全移除此 COPY 指令，让后续 RUN 命令从网络下载
 COPY vosk-model-cn-0.22.zip /build/
 
 # 下载并准备Vosk模型
@@ -52,6 +53,7 @@ RUN mkdir -p /vosk_cache && \
         fi && \
         cp -r /vosk_cache/vosk-model-small-cn-0.22 /build/models/vosk-model; \
     else \
+        # standard 模式：自动检测是否已有文件（已通过 COPY 复制到 /build/），如果有就使用，没有就从网络下载 \
         if [ ! -d "/vosk_cache/vosk-model-cn-0.22" ]; then \
             if [ -f "/build/vosk-model-cn-0.22.zip" ]; then \
                 echo "Using existing vosk-model-cn-0.22.zip from build context..." && \
@@ -60,7 +62,7 @@ RUN mkdir -p /vosk_cache && \
                 unzip vosk-model-cn-0.22.zip && \
                 rm vosk-model-cn-0.22.zip; \
             else \
-                echo "Downloading standard Vosk model..." && \
+                echo "vosk-model-cn-0.22.zip not found, downloading from network..." && \
                 cd /vosk_cache && \
                 wget https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip && \
                 unzip vosk-model-cn-0.22.zip && \
