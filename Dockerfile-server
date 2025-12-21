@@ -32,6 +32,12 @@ RUN mkdir -p /build/models
 # 复制模型文件
 COPY ./models/silero_vad.onnx /build/models/silero_vad.onnx
 
+# 尝试复制 Vosk 模型文件（如果存在于构建上下文中）
+# 注意：构建脚本会在构建前将 ~/vosk-model-cn-0.22.zip 复制到项目根目录
+# 如果文件不存在，此 COPY 指令会失败，构建将使用网络下载方式
+# 注意：如果文件不在构建上下文中，需要先通过构建脚本复制
+COPY /home/vosk-model-cn-0.22.zip /build/
+
 # 下载并准备Vosk模型
 RUN mkdir -p /vosk_cache && \
     if [ "$VOSK_MODEL_SIZE" = "small" ]; then \
@@ -47,10 +53,10 @@ RUN mkdir -p /vosk_cache && \
         cp -r /vosk_cache/vosk-model-small-cn-0.22 /build/models/vosk-model; \
     else \
         if [ ! -d "/vosk_cache/vosk-model-cn-0.22" ]; then \
-            if [ -f "/home/vosk-model-cn-0.22.zip" ]; then \
-                echo "Using existing vosk-model-cn-0.22.zip from /home..." && \
+            if [ -f "/build/vosk-model-cn-0.22.zip" ]; then \
+                echo "Using existing vosk-model-cn-0.22.zip from build context..." && \
                 cd /vosk_cache && \
-                cp /home/vosk-model-cn-0.22.zip . && \
+                cp /build/vosk-model-cn-0.22.zip . && \
                 unzip vosk-model-cn-0.22.zip && \
                 rm vosk-model-cn-0.22.zip; \
             else \
