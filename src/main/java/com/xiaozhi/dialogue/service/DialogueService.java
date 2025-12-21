@@ -354,6 +354,7 @@ public class DialogueService{
 
                 case SPEECH_CONTINUE:
                     // 语音继续，发送数据到流式识别
+                    logger.info("新代码测试");
                     logger.debug("VAD检测到语音持续 - SessionId: {}, isStreaming={}", sessionId, sessionManager.isStreaming(sessionId));
                     if (sessionManager.isStreaming(sessionId)) {
                         sessionManager.sendAudioData(sessionId, vadResult.getProcessedData());
