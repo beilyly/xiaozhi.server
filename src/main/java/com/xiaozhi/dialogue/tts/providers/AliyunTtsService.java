@@ -67,16 +67,24 @@ public class AliyunTtsService implements TtsService {
 
     @Override
     public String textToSpeech(String text) throws Exception {
+        long startTime = System.currentTimeMillis();
         try {
+            String result;
             if (voiceName.contains("sambert")) {
-                return ttsSambert(text);
+                result = ttsSambert(text);
             } else if (getVoiceByName(voiceName) != null) {
-                return ttsQwen(text);
+                result = ttsQwen(text);
             } else {
-                return ttsCosyvoice(text);
+                result = ttsCosyvoice(text);
             }
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            logger.info("aliyun TTS调用完成，voiceName: {}, 耗时: {}ms", voiceName, duration);
+            return result;
         } catch (Exception e) {
-            logger.error("语音合成aliyun -使用{}模型语音合成失败：", voiceName, e);
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            logger.error("语音合成aliyun -使用{}模型语音合成失败，耗时: {}ms：", voiceName, duration, e);
             throw new Exception("语音合成失败");
         }
     }

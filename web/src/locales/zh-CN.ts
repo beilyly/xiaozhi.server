@@ -309,6 +309,13 @@ export default {
     sendMessageSuccess: '正在跳转到与设备 {name} 的对话页面',
     sendMessageFailed: '发送留言失败，请重试',
     deviceInfoIncomplete: '设备信息不完整，无法发送留言',
+    sendWater: '浇水',
+    sendWaterSuccess: '浇水指令已发送到设备 {name}，持续时间{duration}秒',
+    sendWaterFailed: '发送浇水指令失败，请重试',
+    waterDeviceInfoIncomplete: '设备信息不完整，无法发送浇水指令',
+    waterCommandSent: '浇水指令发送成功',
+    waterCommandFailed: '浇水指令发送失败',
+    deviceOffline: '设备离线，无法发送浇水指令',
   },
 
   role: {

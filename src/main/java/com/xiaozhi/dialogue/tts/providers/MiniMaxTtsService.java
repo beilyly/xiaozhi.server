@@ -59,8 +59,12 @@ public class MiniMaxTtsService implements TtsService {
 
     @Override
     public String textToSpeech(String text) throws Exception {
+        long startTime = System.currentTimeMillis();
         var output = Paths.get(outputPath, getAudioFileName()).toString();
         sendRequest(text, output);
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        log.info("minimax TTS调用完成，voiceName: {}, 耗时: {}ms", voiceName, duration);
         return output;
     }
 

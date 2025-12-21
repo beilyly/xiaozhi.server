@@ -234,6 +234,73 @@ public class DeviceMessageController extends BaseController {
     }
 
     /**
+     * 发送浇水指令到指定设备
+     * 
+     * @param request 浇水请求（包含设备ID和持续时间）
+     * @return 发送结果
+     */
+    @PostMapping("/water")
+    @ResponseBody
+    public AjaxResult sendWaterCommand(@RequestBody WaterCommandRequest request) {
+        try {
+            // 验证设备是否存在
+            SysDevice device = deviceService.selectDeviceById(request.getDeviceId());
+            if (device == null) {
+                return AjaxResult.error("设备不存在");
+            }
+
+            // 默认浇水时长为30秒
+            int duration = request.getDuration() != null && request.getDuration() > 0 
+                ? request.getDuration() 
+                : 30;
+
+            // 记录浇水指令发送日志
+            logger.info("发送浇水指令到设备: {} - 持续时间: {}秒", request.getDeviceId(), duration);
+            
+            // 尝试通过WebSocket发送指令
+            var chatSession = sessionManager.getSessionByDeviceId(request.getDeviceId());
+            if (chatSession != null && chatSession.isOpen()) {
+                // 设备在线，直接发送指令
+                try {
+                    // 构造发送给设备的浇水指令格式
+                    String commandJson = String.format(
+                        "{\"type\":\"system\",\"command\":\"water\",\"duration\":%d}",
+                        duration
+                    );
+                    
+                    chatSession.sendTextMessage(commandJson);
+                    
+                    // 更新设备状态为在线
+                    device.setState("1");
+                    deviceService.update(device);
+                    
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("commandId", "cmd_" + System.currentTimeMillis());
+                    result.put("deviceId", request.getDeviceId());
+                    result.put("status", "sent");
+                    result.put("duration", duration);
+                    result.put("timestamp", LocalDateTime.now());
+                    
+                    logger.info("浇水指令已通过WebSocket发送到设备: {} - 持续时间: {}秒", request.getDeviceId(), duration);
+                    return AjaxResult.success("浇水指令发送成功", result);
+                    
+                } catch (Exception e) {
+                    logger.error("通过WebSocket发送浇水指令失败", e);
+                    return AjaxResult.error("浇水指令发送失败: " + e.getMessage());
+                }
+            } else {
+                // 设备离线
+                logger.warn("设备离线，无法发送浇水指令 - DeviceId: {}", request.getDeviceId());
+                return AjaxResult.error("设备离线，无法发送浇水指令");
+            }
+            
+        } catch (Exception e) {
+            logger.error("发送浇水指令到设备失败", e);
+            return AjaxResult.error("浇水指令发送失败");
+        }
+    }
+
+    /**
      * 设备消息请求实体
      */
     public static class DeviceMessageRequest {
@@ -273,6 +340,31 @@ public class DeviceMessageController extends BaseController {
 
         public void setTimestamp(String timestamp) {
             this.timestamp = timestamp;
+        }
+    }
+
+    /**
+     * 浇水指令请求实体
+     */
+    public static class WaterCommandRequest {
+        private String deviceId;
+        private Integer duration;
+
+        // Getters and Setters
+        public String getDeviceId() {
+            return deviceId;
+        }
+
+        public void setDeviceId(String deviceId) {
+            this.deviceId = deviceId;
+        }
+
+        public Integer getDuration() {
+            return duration;
+        }
+
+        public void setDuration(Integer duration) {
+            this.duration = duration;
         }
     }
 }

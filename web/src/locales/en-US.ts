@@ -309,6 +309,13 @@ export default {
     sendMessageSuccess: 'Redirecting to conversation page with device {name}',
     sendMessageFailed: 'Failed to send message, please try again',
     deviceInfoIncomplete: 'Device information is incomplete, unable to send message',
+    sendWater: 'Water',
+    sendWaterSuccess: 'Water command sent to device {name}, duration {duration} seconds',
+    sendWaterFailed: 'Failed to send water command, please try again',
+    waterDeviceInfoIncomplete: 'Device information is incomplete, unable to send water command',
+    waterCommandSent: 'Water command sent successfully',
+    waterCommandFailed: 'Failed to send water command',
+    deviceOffline: 'Device offline, unable to send water command',
   },
 
   role: {

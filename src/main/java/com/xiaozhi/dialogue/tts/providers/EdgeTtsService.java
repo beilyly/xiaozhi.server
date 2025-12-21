@@ -50,6 +50,7 @@ public class EdgeTtsService implements TtsService {
 
     @Override
     public String textToSpeech(String text) throws Exception {
+        long startTime = System.currentTimeMillis();
         // 获取中文语音
         Voice voiceObj = TTSVoice.provides().stream()
                 .filter(v -> v.getShortName().equals(voiceName))
@@ -88,6 +89,9 @@ public class EdgeTtsService implements TtsService {
         Files.deleteIfExists(Paths.get(fullPath));
 
         // 4. 返回重采样后的文件路径
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        logger.info("edge TTS调用完成，voiceName: {}, 耗时: {}ms", voiceName, duration);
         return AudioUtils.AUDIO_PATH + resampledFileName;
     }
 

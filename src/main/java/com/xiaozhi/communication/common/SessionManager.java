@@ -585,7 +585,7 @@ public class SessionManager {
         Sinks.Many<byte[]> sink = getAudioStream(sessionId);
         if (sink != null) {
             sink.tryEmitNext(data);
-            logger.debug("发送音频数据到音频流 - SessionId: {}, length={}", sessionId, data != null ? data.length : 0);
+//            logger.debug("发送音频数据到音频流 - SessionId: {}, length={}", sessionId, data != null ? data.length : 0);
         }
     }
 

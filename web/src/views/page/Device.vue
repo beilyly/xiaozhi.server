@@ -98,7 +98,8 @@
               <a-space v-else>
                 <a @click="edit(record.deviceId)">编辑</a>
                 <a @click="editWithDialog(record)">详情</a>
-                <a @click="sendMessage(record)" style="color: #1890ff">发送留言</a>
+                <a @click="sendMessage(record)" style="color: #1890ff">{{ $t('device.sendMessage') }}</a>
+                <a @click="sendWater(record)" style="color: #52c41a">{{ $t('device.sendWater') }}</a>
                 <a-popconfirm
                   title="确定要删除此设备吗？"
                   ok-text="确定"
@@ -486,7 +487,7 @@ export default {
       try {
         // 验证设备信息
         if (!device || !device.deviceId) {
-          this.$message.error('设备信息不完整，无法发送留言');
+          this.$message.error(this.$t('device.deviceInfoIncomplete'));
           return;
         }
         
@@ -503,10 +504,50 @@ export default {
         // 跳转到聊天页面
         this.$router.push('/chat');
         
-        this.$message.success(`正在跳转到与设备 ${deviceInfo.deviceName} 的对话页面`);
+        this.$message.success(this.$t('device.sendMessageSuccess', { name: deviceInfo.deviceName }));
       } catch (error) {
         console.error('发送留言失败:', error);
-        this.$message.error('发送留言失败，请重试');
+        this.$message.error(this.$t('device.sendMessageFailed'));
+      }
+    },
+    
+    // 发送浇水指令到指定设备
+    sendWater(device) {
+      try {
+        // 验证设备信息
+        if (!device || !device.deviceId) {
+          this.$message.error(this.$t('device.waterDeviceInfoIncomplete'));
+          return;
+        }
+        
+        const duration = 30;
+        
+        // 发送浇水指令，默认30秒
+        axios
+          .post({
+            url: api.deviceMessage.water,
+            data: {
+              deviceId: device.deviceId,
+              duration: duration
+            }
+          })
+          .then((res) => {
+            if (res.code === 200) {
+              this.$message.success(this.$t('device.sendWaterSuccess', { 
+                name: device.deviceName || device.deviceId,
+                duration: duration
+              }));
+            } else {
+              this.$message.error(res.message || this.$t('device.waterCommandFailed'));
+            }
+          })
+          .catch((error) => {
+            console.error('发送浇水指令失败:', error);
+            this.$message.error(this.$t('device.sendWaterFailed'));
+          });
+      } catch (error) {
+        console.error('发送浇水指令失败:', error);
+        this.$message.error(this.$t('device.sendWaterFailed'));
       }
     }
   },

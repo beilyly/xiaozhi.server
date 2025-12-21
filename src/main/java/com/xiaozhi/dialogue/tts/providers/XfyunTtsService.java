@@ -60,6 +60,7 @@ public class XfyunTtsService implements TtsService {
 
     @Override
     public String textToSpeech(String text) throws Exception {
+        long startTime = System.currentTimeMillis();
         if (text == null || text.isEmpty()) {
             logger.warn("文本内容为空！");
             return null;
@@ -74,12 +75,20 @@ public class XfyunTtsService implements TtsService {
             boolean success = sendRequest(text, file);
 
             if (success) {
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+                logger.info("xfyun TTS调用完成，voiceName: {}, 耗时: {}ms", voiceName, duration);
                 return audioFilePath;
             } else {
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+                logger.error("xfyun TTS调用失败，voiceName: {}, 耗时: {}ms", voiceName, duration);
                 throw new Exception("语音合成失败");
             }
         } catch (Exception e) {
-            logger.error("语音合成时发生错误！", e);
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            logger.error("语音合成时发生错误，voiceName: {}, 耗时: {}ms！", voiceName, duration, e);
             throw e;
         }
     }
