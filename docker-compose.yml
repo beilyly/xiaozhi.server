@@ -66,6 +66,31 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:  # 定义持久化卷
-  maven_repo:  # 持久化Maven仓库
-  vosk_models:  # 持久化Vosk模型
+  mysql_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/data/mysql
+
+  maven_repo:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/data/maven
+
+  vosk_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/data/vosk
+
+  app_files:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/data/appfile
+
