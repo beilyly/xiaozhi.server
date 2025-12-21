@@ -3,7 +3,7 @@
 set -e
 
 COMPOSE_FILE="docker-compose.yml"
-GIT_BRANCH="macminiversion"   # 如果你用 master，这里改成 master
+GIT_BRANCH="testversion"   # 如果你用 master，这里改成 master
 
 print_usage() {
   echo ""
