@@ -47,11 +47,19 @@ RUN mkdir -p /vosk_cache && \
         cp -r /vosk_cache/vosk-model-small-cn-0.22 /build/models/vosk-model; \
     else \
         if [ ! -d "/vosk_cache/vosk-model-cn-0.22" ]; then \
-            echo "Downloading standard Vosk model..." && \
-            cd /vosk_cache && \
-            wget https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip && \
-            unzip vosk-model-cn-0.22.zip && \
-            rm vosk-model-cn-0.22.zip; \
+            if [ -f "/home/vosk-model-cn-0.22.zip" ]; then \
+                echo "Using existing vosk-model-cn-0.22.zip from /home..." && \
+                cd /vosk_cache && \
+                cp /home/vosk-model-cn-0.22.zip . && \
+                unzip vosk-model-cn-0.22.zip && \
+                rm vosk-model-cn-0.22.zip; \
+            else \
+                echo "Downloading standard Vosk model..." && \
+                cd /vosk_cache && \
+                wget https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip && \
+                unzip vosk-model-cn-0.22.zip && \
+                rm vosk-model-cn-0.22.zip; \
+            fi; \
         else \
             echo "Using cached standard Vosk model"; \
         fi && \
