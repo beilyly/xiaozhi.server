@@ -21,38 +21,29 @@ git_pull() {
   git fetch origin
   git checkout $GIT_BRANCH
   
-  # 检查是否有未暂存的变更
+  # 检查是否有未暂存的变更，如果有则直接丢弃
   if ! git diff-index --quiet HEAD --; then
-    echo ">>> Stashing uncommitted changes..."
-    git stash
-    STASHED=true
-  else
-    STASHED=false
+    echo ">>> Discarding local changes..."
+    git reset --hard HEAD
   fi
   
   # 执行 rebase pull
   git pull --rebase origin $GIT_BRANCH
-  
-  # 如果有 stash，恢复变更
-  if [ "$STASHED" = true ]; then
-    echo ">>> Restoring stashed changes..."
-    git stash pop || true
-  fi
 }
 
 build_and_up() {
   SERVICE=$1
   echo ">>> Building $SERVICE ..."
-  docker-compose -f $COMPOSE_FILE build $SERVICE
+  docker compose -f $COMPOSE_FILE build $SERVICE
 
   echo ">>> Starting $SERVICE (without touching mysql)..."
-  docker-compose -f $COMPOSE_FILE up -d --no-deps $SERVICE
+  docker compose -f $COMPOSE_FILE up -d --no-deps $SERVICE
 }
 
 restart_only() {
   SERVICE=$1
   echo ">>> Restarting $SERVICE ..."
-  docker-compose -f $COMPOSE_FILE restart $SERVICE
+  docker compose -f $COMPOSE_FILE restart $SERVICE
 }
 
 if [ $# -lt 1 ]; then
