@@ -19,7 +19,6 @@ services:
 
   node:
     build:
-      container_name: node
       context: .
       dockerfile: Dockerfile-node
     depends_on:
@@ -34,7 +33,6 @@ services:
 
   server:
     build:
-      container_name: server
       context: .
       dockerfile: Dockerfile-server
       args:
