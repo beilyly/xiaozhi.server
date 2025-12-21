@@ -136,6 +136,7 @@ public class MqttMessageDispatcher {
         try {
             logger.info("Handle HelloMessage - sessionId: {}, clientId: {}", session.getSessionId(), session.getClientId());
             sessionManager.registerSession(session.getSessionId(), session, session.getClientId());
+            sessionManager.setCloseAfterChat(session.getSessionId(), false);
             // 如果之前有假移除的会话且 UDP 通道仍可用，则在 registerSession 中已复用；
             // 只有在不存在可用 UDP 通道时才创建新的。
             UdpAudioChannel udpChannel = session.getUdpChannel();

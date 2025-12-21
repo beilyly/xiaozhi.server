@@ -432,7 +432,7 @@ public class DialogueService{
                         logger.info("STT整句识别结果为空，第 {} 次连续空结果 - SessionId: {}", current, sessionId);
 
                         // 小于3次，仅忽略本轮，不做goodbye
-                        if (current < 3) {
+                        if (current < 5) {
                             return;
                         }
 

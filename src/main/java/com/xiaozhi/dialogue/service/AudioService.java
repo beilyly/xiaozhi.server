@@ -41,7 +41,7 @@ public class AudioService {
 
     // 帧发送时间间隔略小于OPUS_FRAME_DURATION_MS，避免因某些调度原因，导致没能在规定时间内发送，设备出现杂音
     private static final long OPUS_FRAME_SEND_INTERVAL_MS = AudioUtils.OPUS_FRAME_DURATION_MS;
-    
+
     // 仅播放文本的 Sleep 时长
     private static final long ONLY_TEXT_SLEEP_TIME_MS = 1000;
 
@@ -64,7 +64,7 @@ public class AudioService {
 
     // 存储每个会话当前是否正在播放音频
     private final Map<String, AtomicBoolean> isPlaying = new ConcurrentHashMap<>();
-    
+
 
     // 存储每个会话的调度任务
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -74,7 +74,7 @@ public class AudioService {
 
     // 存储播放开始时间（纳秒）
     private final Map<String, Long> playStartTimes = new ConcurrentHashMap<>();
-    
+
     // 存储播放位置（毫秒）
     private final Map<String, Long> playPositions = new ConcurrentHashMap<>();
 
@@ -114,29 +114,29 @@ public class AudioService {
             // 标记播放结束
             AtomicBoolean playingState = isPlaying.computeIfAbsent(sessionId, k -> new AtomicBoolean());
             playingState.set(false);
-            
+
             // 取消调度任务
             cancelScheduledTask(sessionId);
-            
+
             // 清理播放时间信息
             cleanTimers(sessionId);
-            
+
             // 延迟500ms后发送stop消息，确保设备完成音频播放
             CompletableFuture<Void> sendTtsMessageFuture = CompletableFuture.runAsync(() -> {
                 messageService.sendTtsMessage(session, null, "stop");
-                // 如果本轮对话结束后需要关闭会话，则同时发送goodbye控制消息
-                if (sessionManager.isCloseAfterChat(sessionId)) {
-                    try {
-                        String goodbyeJson = String.format("{\"type\":\"goodbye\",\"session_id\":\"%s\"}", sessionId);
-                        messageService.sendTextMessage(session, goodbyeJson);
-                    } catch (Exception ex) {
-                        logger.warn("发送goodbye控制消息失败 - SessionId: {}, error: {}", sessionId, ex.getMessage());
-                    }
-                }
             }, CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS));
             // 检查是否需要关闭会话
             if (sessionManager.isCloseAfterChat(sessionId)) {
                 sendTtsMessageFuture.thenRun(() -> {
+                    // 如果本轮对话结束后需要关闭会话，则同时发送goodbye控制消息
+                    if (sessionManager.isCloseAfterChat(sessionId)) {
+                        try {
+                            String goodbyeJson = String.format("{\"type\":\"goodbye\",\"session_id\":\"%s\"}", sessionId);
+                            messageService.sendTextMessage(session, goodbyeJson);
+                        } catch (Exception ex) {
+                            logger.warn("发送goodbye控制消息失败 - SessionId: {}, error: {}", sessionId, ex.getMessage());
+                        }
+                    }
                     sessionManager.closeSession(sessionId);
                 });
             }
@@ -161,7 +161,7 @@ public class AudioService {
      * 检查会话是否正在播放音频
      */
     public boolean isPlaying(String sessionId) {
-        return isPlaying.containsKey(sessionId) && 
+        return isPlaying.containsKey(sessionId) &&
                isPlaying.get(sessionId).get();
     }
 
@@ -191,21 +191,21 @@ public class AudioService {
         // 创建一个 CompletableFuture 链来处理整个流程
         CompletableFuture<Void> startFuture = isFirst ? CompletableFuture.runAsync(()->sendStart(session))
                 : CompletableFuture.completedFuture(null);
-        
+
         logger.info("向设备发送音频消息（sendAudioMessage） - SessionId: {}, 文本: {}, 音频路径: {}", sessionId, text, audioPath);
 
         if (audioPath == null) {
             if (text != null && !text.isEmpty()) {
                 // 检查是否是纯表情符号（通过检查句子是否有moods但没有实际文本内容）
-                boolean isOnlyEmoji = sentence.getMoods() != null && !sentence.getMoods().isEmpty() && 
+                boolean isOnlyEmoji = sentence.getMoods() != null && !sentence.getMoods().isEmpty() &&
                                     (text.trim().length() <= 4); // 表情符号通常不超过4个字符
 
                 if (isOnlyEmoji) {
                     // 纯表情符号，只发送表情，不发送文本
                     CompletableFuture<Void> emotionFuture = startFuture.thenRun(() -> sendSentenceEmotion(session, sentence, null));
-                    
+
                     final AtomicBoolean finalPlayingState = playingState;
-                    
+
                     return emotionFuture.thenCompose(v -> {
                         finalPlayingState.set(false);
                         try {
@@ -225,7 +225,7 @@ public class AudioService {
 
                     // 发送句子表情
                     CompletableFuture<Void> emotionFuture = sentenceStartFuture.thenRun(() -> sendSentenceEmotion(session, sentence, null));
-                    
+
                     // 使用单独的变量存储播放状态引用
                     final AtomicBoolean finalPlayingState = playingState;
 
@@ -251,13 +251,13 @@ public class AudioService {
             playingState.set(false);
             return startFuture;
         }
-        
+
         // 使用单独的变量存储播放状态引用
         final AtomicBoolean finalPlayingState = playingState;
-        
+
         // 发送句子开始标记
         CompletableFuture<Void> sentenceStartFuture = startFuture.thenRun(() -> sendSentenceStart(session, text));
-        
+
         // 发送句子表情
         CompletableFuture<Void> emotionFuture = sentenceStartFuture.thenRun(() -> sendSentenceEmotion(session, sentence, null));
 
@@ -292,10 +292,10 @@ public class AudioService {
 
             // 确保播放状态为true
             finalPlayingState.set(true);
-            
+
             // 创建发送帧的CompletableFuture
             CompletableFuture<Void> sendFramesFuture = new CompletableFuture<>();
-            
+
             try {
                 // 计算句子间需要等待的时间（如果有上一帧的话）
                 long initialDelay = 0;
@@ -307,13 +307,13 @@ public class AudioService {
                         initialDelay = OPUS_FRAME_SEND_INTERVAL_MS - timeSinceLastFrame;
                     }
                 }
-                
+
                 // 初始化播放时间和位置（延迟后再设置，避免时间计算错误）
                 final long frameInitialDelay = initialDelay;
-                
+
                 // 创建帧发送任务，从第一帧开始通过调度器发送
                 final int[] frameIndex = {0};
-                
+
                 Runnable frameTask = new Runnable() {
                     @Override
                     public void run() {
@@ -323,30 +323,30 @@ public class AudioService {
                                 endTask(sessionId, sendFramesFuture);
                                 return;
                             }
-                            
+
                             // 首帧发送时初始化播放时间和位置
                             if (frameIndex[0] == 0) {
                                 playStartTimes.put(sessionId, System.nanoTime());
                                 playPositions.put(sessionId, 0L);
                             }
-                            
+
                             // 更新活跃时间
                             sessionManager.updateLastActivity(sessionId);
-                            
+
                             // 发送当前帧
                             byte[] frame = opusFrames.get(frameIndex[0]++);
                             sendOpusFrame(session, frame);
-                            
+
                             // 更新最后发送帧的时间
                             lastFrameSentTime.computeIfAbsent(sessionId, k -> new AtomicLong())
                                 .set(System.currentTimeMillis());
-                            
+
                             // 更新播放位置
                             Long position = playPositions.get(sessionId);
                             if (position != null) {
                                 playPositions.put(sessionId, position + OPUS_FRAME_SEND_INTERVAL_MS);
                             }
-                            
+
                             // 计算下一帧的发送时间
                             if (frameIndex[0] < opusFrames.size()) {
                                 scheduleNextFrame(sessionId, this);
@@ -354,7 +354,7 @@ public class AudioService {
                                 // 所有帧已发送完成
                                 endTask(sessionId, sendFramesFuture);
                             }
-                            
+
                         } catch (Exception e) {
                             // 发生错误，取消调度任务
                             logger.error("非流式帧处理失败", e);
@@ -362,7 +362,7 @@ public class AudioService {
                         }
                     }
                 };
-                
+
                 // 启动帧发送调度，使用计算好的初始延迟
                 if (opusFrames.size() > 0) {
                     ScheduledFuture<?> future = scheduler.schedule(frameTask, frameInitialDelay, TimeUnit.MILLISECONDS);
@@ -371,21 +371,21 @@ public class AudioService {
                     // 没有帧需要发送
                     endTask(sessionId, sendFramesFuture);
                 }
-                
+
             } catch (Exception e) {
                 logger.error("音频帧发送初始化失败", e);
                 endTask(sessionId, sendFramesFuture, e);
             }
-            
+
             // 返回帧发送Future
             return sendFramesFuture;
         }).whenComplete((result, error) -> {
             // 无论成功还是失败，都标记播放结束
             finalPlayingState.set(false);
-            
+
             // 取消调度任务
             cancelScheduledTask(sessionId);
-            
+
             // 清理播放时间信息
             cleanTimers(sessionId);
         }).thenCompose(v -> {
@@ -396,7 +396,7 @@ public class AudioService {
             return CompletableFuture.completedFuture(null);
         }).exceptionally(error -> {
             logger.error("发送音频消息失败", error);
-            
+
             // 如果发生错误但仍然是结束消息，确保发送stop
             if (isLast) {
                 try {
@@ -439,7 +439,7 @@ public class AudioService {
         cleanTimers(sessionId);
         cancelScheduledTask(sessionId);
         opusProcessor.cleanup(sessionId);
-        
+
         // 清理音频发送任务
         CompletableFuture<?> sendAudioTask = sendAudioTasks.remove(sessionId);
         if (sendAudioTask != null && !sendAudioTask.isDone()) {
@@ -454,17 +454,17 @@ public class AudioService {
     private void endTask(String sessionId, CompletableFuture<Void> future) {
         endTask(sessionId, future, null);
     }
-    
+
     /**
      * 结束非流式任务（带异常）
      */
     private void endTask(String sessionId, CompletableFuture<Void> future, Throwable error) {
         // 取消调度任务
         cancelScheduledTask(sessionId);
-        
+
         // 清理播放时间信息
         cleanTimers(sessionId);
-        
+
         // 完成Future
         if (error != null) {
             future.completeExceptionally(error);
@@ -480,14 +480,14 @@ public class AudioService {
         playStartTimes.remove(sessionId);
         playPositions.remove(sessionId);
     }
-    
+
     /**
      * 计算并调度下一帧的发送时间
      */
     private void scheduleNextFrame(String sessionId, Runnable frameTask) {
         Long startTime = playStartTimes.get(sessionId);
         Long position = playPositions.get(sessionId);
-        
+
         if (startTime == null || position == null) {
             // 如果没有时间信息，使用固定间隔
             ScheduledFuture<?> future = scheduler.schedule(frameTask, OPUS_FRAME_SEND_INTERVAL_MS, TimeUnit.MILLISECONDS);
@@ -499,7 +499,7 @@ public class AudioService {
         long expectedTime = startTime + position * 1_000_000;
         long currentTime = System.nanoTime();
         long delayNanos = expectedTime - currentTime;
-        
+
         ScheduledFuture<?> future;
         if (delayNanos <= 0) {
             // 如果当前时间已经超过预期时间，立即发送
@@ -511,7 +511,7 @@ public class AudioService {
 
         scheduledTasks.put(sessionId, future);
     }
-    
+
     /**
      * 取消调度任务
      */

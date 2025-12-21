@@ -191,7 +191,7 @@ public class SessionManager {
             if (removedSession instanceof com.xiaozhi.communication.server.mqtt.MqttSession oldMqttSession
                     && chatSession instanceof com.xiaozhi.communication.server.mqtt.MqttSession newMqttSession) {
                 boolean reused = newMqttSession.reuseUdpChannelFrom(oldMqttSession);
-                if (reused) {
+                if (reused && oldMqttSession.isAudioChannelOpen()) {
                     logger.info("复用ESP32 UDP通道 - DeviceId: {}, SessionId: {}",
                             deviceId, newMqttSession.getSessionId());
                 }
