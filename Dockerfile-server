@@ -33,10 +33,10 @@ RUN mkdir -p /build/models
 COPY ./models/silero_vad.onnx /build/models/silero_vad.onnx
 
 # 尝试复制 Vosk 模型文件（如果存在于构建上下文中）
-# 注意：构建脚本会在构建前将 ~/vosk-model-cn-0.22.zip 复制到项目根目录
-# 如果文件不存在，此 COPY 指令会失败，构建将使用网络下载方式
-# 注意：如果文件不在构建上下文中，需要先通过构建脚本复制
-COPY /home/vosk-model-cn-0.22.zip /build/
+# 注意：deploy.sh 会在构建前将 /home/vosk-model-cn-0.22.zip 复制到项目根目录
+# 如果文件不存在，此 COPY 会失败，构建将失败
+# 确保 deploy.sh 已正确复制文件，或者文件已在项目根目录
+COPY vosk-model-cn-0.22.zip /build/
 
 # 下载并准备Vosk模型
 RUN mkdir -p /vosk_cache && \

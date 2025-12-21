@@ -31,8 +31,31 @@ git_pull() {
   git pull --rebase origin $GIT_BRANCH
 }
 
+prepare_vosk_model() {
+  # 如果 /home/vosk-model-cn-0.22.zip 存在，复制到项目根目录供 Docker 构建使用
+  # 这样可以在构建时使用本地文件，避免每次都要下载
+  if [ -f "/home/vosk-model-cn-0.22.zip" ]; then
+    echo ">>> Copying vosk-model-cn-0.22.zip from /home to project root..."
+    cp -f /home/vosk-model-cn-0.22.zip ./vosk-model-cn-0.22.zip
+    echo ">>> File copied successfully"
+  else
+    echo ">>> /home/vosk-model-cn-0.22.zip not found, will download from network during build"
+    # 如果源文件不存在，删除项目根目录中的旧文件（如果有）
+    if [ -f "./vosk-model-cn-0.22.zip" ]; then
+      echo ">>> Removing old vosk-model-cn-0.22.zip from project root"
+      rm -f ./vosk-model-cn-0.22.zip
+    fi
+  fi
+}
+
 build_and_up() {
   SERVICE=$1
+  
+  # 如果是 server 服务，准备 Vosk 模型文件
+  if [ "$SERVICE" = "server" ]; then
+    prepare_vosk_model
+  fi
+  
   echo ">>> Building $SERVICE ..."
   docker compose -f $COMPOSE_FILE build $SERVICE
 
