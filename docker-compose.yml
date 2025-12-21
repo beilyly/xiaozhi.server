@@ -1,6 +1,6 @@
 services:
   mysql:
-    container_name: home
+    container_name: mysql
     build:
       context: .
       dockerfile: Dockerfile-mysql
