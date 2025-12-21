@@ -3,7 +3,7 @@
 set -e
 
 COMPOSE_FILE="docker-compose.yml"
-GIT_BRANCH="testversion"   # 如果你用 master，这里改成 master
+GIT_BRANCH="testversion "   # 如果你用 master，这里改成 master
 
 print_usage() {
   echo ""
@@ -20,7 +20,24 @@ git_pull() {
   echo ">>> Pulling latest code from git ($GIT_BRANCH)..."
   git fetch origin
   git checkout $GIT_BRANCH
+  
+  # 检查是否有未暂存的变更
+  if ! git diff-index --quiet HEAD --; then
+    echo ">>> Stashing uncommitted changes..."
+    git stash
+    STASHED=true
+  else
+    STASHED=false
+  fi
+  
+  # 执行 rebase pull
   git pull --rebase origin $GIT_BRANCH
+  
+  # 如果有 stash，恢复变更
+  if [ "$STASHED" = true ]; then
+    echo ">>> Restoring stashed changes..."
+    git stash pop || true
+  fi
 }
 
 build_and_up() {
