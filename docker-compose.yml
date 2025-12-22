@@ -35,6 +35,7 @@ services:
       dockerfile: Dockerfile-server
       args:
         - VOSK_MODEL_SIZE=${VOSK_MODEL_SIZE:-standard}
+        - VOSK_MODEL_LANG=${VOSK_MODEL_LANG:-en}
       # 添加构建缓存设置
       cache_from:
         - eclipse-temurin:21-jre
@@ -51,10 +52,11 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/xiaozhi?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - SPRING_DATASOURCE_USERNAME=xiaozhi
       - SPRING_DATASOURCE_PASSWORD=123456
-      - xiaozhi.firmware.version=2.1.2
+      - xiaozhi.firmware.version=2.1.1
       - XIAOZHI_SSL_SKIP_VERIFICATION=false
       - XIAOZHI_MQTT_EXTERNAL_HOST=8.130.214.215
       - HOST_IP=8.130.214.215   # ← 这里添加
+      - XIAOZHI_FIRMWARE_DOWNLOADURL=http://8.130.214.215:8091/api/file/firmware/download/firmware_1761054662289.bin
     volumes:
       - maven_repo:/root/.m2/repository  # 持久化Maven仓库
       - vosk_models:/vosk_cache  # 持久化Vosk模型

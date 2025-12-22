@@ -32,20 +32,53 @@ git_pull() {
 }
 
 prepare_vosk_model() {
-  # 如果 /home/vosk-model-cn-0.22.zip 存在，复制到项目根目录供 Docker 构建使用
-  # Dockerfile 会自动检测文件是否存在，如果存在就使用，不存在就从网络下载
-  if [ -f "/home/vosk-model-cn-0.22.zip" ]; then
-    echo ">>> Copying vosk-model-cn-0.22.zip from /home to project root..."
-    cp -f /home/vosk-model-cn-0.22.zip ./vosk-model-cn-0.22.zip
-    echo ">>> File copied successfully, Dockerfile will use local file"
-  else
-    echo ">>> /home/vosk-model-cn-0.22.zip not found"
-    # 如果源文件不存在，删除项目根目录中的旧文件（如果有）
-    if [ -f "./vosk-model-cn-0.22.zip" ]; then
-      echo ">>> Removing old vosk-model-cn-0.22.zip from project root"
-      rm -f ./vosk-model-cn-0.22.zip
+  # 获取语言参数，默认为 cn
+  VOSK_MODEL_LANG=${VOSK_MODEL_LANG:-cn}
+  
+  if [ "$VOSK_MODEL_LANG" = "en" ]; then
+    # 英文模型处理
+    MODEL_FILE="vosk-model-en-us-0.22.zip"
+    if [ -f "/home/${MODEL_FILE}" ]; then
+      echo ">>> Copying ${MODEL_FILE} from /home to models directory..."
+      cp -f /home/${MODEL_FILE} ./models/${MODEL_FILE}
+      echo ">>> File copied successfully, Dockerfile will use local file"
+    elif [ -f "./models/${MODEL_FILE}" ]; then
+      echo ">>> Found ${MODEL_FILE} in models directory, Dockerfile will use it"
+    else
+      echo ">>> /home/${MODEL_FILE} and ./models/${MODEL_FILE} not found"
+      # 如果源文件不存在，删除项目根目录和 models 目录中的旧文件（如果有）
+      if [ -f "./${MODEL_FILE}" ]; then
+        echo ">>> Removing old ${MODEL_FILE} from project root"
+        rm -f ./${MODEL_FILE}
+      fi
+      if [ -f "./models/${MODEL_FILE}" ]; then
+        echo ">>> Removing old ${MODEL_FILE} from models directory"
+        rm -f ./models/${MODEL_FILE}
+      fi
+      echo ">>> Dockerfile will download model from network during build"
     fi
-    echo ">>> Dockerfile will download model from network during build"
+  else
+    # 中文模型处理（默认）
+    MODEL_FILE="vosk-model-cn-0.22.zip"
+    if [ -f "/home/${MODEL_FILE}" ]; then
+      echo ">>> Copying ${MODEL_FILE} from /home to models directory..."
+      cp -f /home/${MODEL_FILE} ./models/${MODEL_FILE}
+      echo ">>> File copied successfully, Dockerfile will use local file"
+    elif [ -f "./models/${MODEL_FILE}" ]; then
+      echo ">>> Found ${MODEL_FILE} in models directory, Dockerfile will use it"
+    else
+      echo ">>> /home/${MODEL_FILE} and ./models/${MODEL_FILE} not found"
+      # 如果源文件不存在，删除项目根目录和 models 目录中的旧文件（如果有）
+      if [ -f "./${MODEL_FILE}" ]; then
+        echo ">>> Removing old ${MODEL_FILE} from project root"
+        rm -f ./${MODEL_FILE}
+      fi
+      if [ -f "./models/${MODEL_FILE}" ]; then
+        echo ">>> Removing old ${MODEL_FILE} from models directory"
+        rm -f ./models/${MODEL_FILE}
+      fi
+      echo ">>> Dockerfile will download model from network during build"
+    fi
   fi
 }
 
