@@ -4,7 +4,7 @@ FROM eclipse-temurin:21-jdk AS builder
 # 添加构建参数，默认使用标准模型
 ARG VOSK_MODEL_SIZE=standard
 # 添加语言参数，默认使用中文模型，可选：cn 或 en
-ARG VOSK_MODEL_LANG=cn
+ARG VOSK_MODEL_LANG=en
 
 # 安装必要的构建工具
 RUN apt-get update && apt-get install -y --no-install-recommends \
