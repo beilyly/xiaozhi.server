@@ -28,6 +28,13 @@ export function updateDevice(data: Partial<Device>) {
 }
 
 /**
+ * 发送浇水指令到指定设备
+ */
+export function sendWaterCommand(params: { deviceId: string; duration: number }) {
+  return http.postJSON(api.deviceMessage.water, params)
+}
+
+/**
  * 删除设备
  */
 export function deleteDevice(deviceId: string) {

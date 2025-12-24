@@ -41,6 +41,11 @@ export default {
     delete: '/message/delete',
     export: '/message/export',
   },
+  deviceMessage: {
+    send: '/device/message/send',
+    query: '/device/message/query',
+    water: '/device/message/water',
+  },
   config: {
     add: '/config/add',
     query: '/config/query',

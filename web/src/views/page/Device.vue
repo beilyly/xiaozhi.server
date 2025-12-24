@@ -23,32 +23,32 @@
             </a-row>
           </a-form>
         </div>
-        
+
         <!-- 表格数据 -->
         <a-card :bodyStyle="{ padding: 0 }" :bordered="false">
           <div slot="extra" style="display: flex; align-items: center;">
             <a-input-search enter-button="添加设备" autoFocus placeholder="请输入设备码" @search="addDevice" />
           </div>
-          
+
           <template slot="title">
             <span>设备管理</span>
           </template>
-          
-          <a-table 
-            rowKey="deviceId" 
-            :columns="tableColumns" 
-            :data-source="data" 
+
+          <a-table
+            rowKey="deviceId"
+            :columns="tableColumns"
+            :data-source="data"
             :loading="loading"
-            :pagination="pagination" 
-            :scroll="{ x: 1200 }" 
+            :pagination="pagination"
+            :scroll="{ x: 1200 }"
             size="middle">
-            
+
             <!-- 设备名称列 -->
             <template slot="deviceName" slot-scope="text, record">
               <div>
-                <a-input v-if="record.editable" style="margin: -5px 0; text-align: center" :value="text" 
-                  @change="e => inputEdit(e.target.value, record.deviceId, 'deviceName')" 
-                  @keyup.enter="e => update(record, record.deviceId)" 
+                <a-input v-if="record.editable" style="margin: -5px 0; text-align: center" :value="text"
+                  @change="e => inputEdit(e.target.value, record.deviceId, 'deviceName')"
+                  @keyup.enter="e => update(record, record.deviceId)"
                   @keyup.esc="e => cancel(record.deviceId)" />
                 <span v-else-if="editingKey === ''" @click="edit(record.deviceId)" style="cursor: pointer">
                   <a-tooltip title="点击编辑" :mouseEnterDelay="0.5">
@@ -79,7 +79,7 @@
 
             <!-- 设备状态列 -->
             <template slot="state" slot-scope="text">
-              <a-tag :color="text == 1 ? 'green' : 'red'">{{ text == 1 ? '在线' : '离线' }}</a-tag>
+              <a-tag :color="text == 1 ? 'green' : 'red'">{{ text == 1 ? '1在线' : '2离线' }}</a-tag>
             </template>
 
             <!-- 时间列通用模板 -->
@@ -99,7 +99,7 @@
                 <a @click="edit(record.deviceId)">编辑</a>
                 <a @click="editWithDialog(record)">详情</a>
                 <a @click="sendMessage(record)" style="color: #1890ff">{{ $t('device.sendMessage') }}</a>
-                <a @click="sendWater(record)" style="color: #52c41a">{{ $t('device.sendWater') }}</a>
+                <a @click="sendWater(record)" style="color: #52c41a">{{ $t('device.sendWater') }} 浇水</a>
                 <a-popconfirm
                   title="确定要删除此设备吗？"
                   ok-text="确定"
@@ -114,13 +114,13 @@
         </a-card>
       </div>
     </a-layout-content>
-    
+
     <!-- 设备详情弹窗 -->
-    <DeviceEditDialog 
-      @submit="update" 
-      @close="editVisible = false" 
+    <DeviceEditDialog
+      @submit="update"
+      @close="editVisible = false"
       @clear-memory="clearMemory"
-      :visible="editVisible" 
+      :visible="editVisible"
       :current="currentDevice"
       :role-items="roleItems"
       :clearMemoryLoading="clearMemoryLoading"/>
@@ -167,7 +167,7 @@ export default {
         { label: "在线", value: "1", key: "1" },
         { label: "离线", value: "0", key: "0" },
       ],
-      
+
       // 表格数据
       tableColumns: [
         {
@@ -254,25 +254,25 @@ export default {
           fixed: "right",
         },
       ],
-      
+
       // 资源数据
       roleItems: [],
-      
+
       // 设备数据
       data: [],
       cacheData: [],
       editingKey: "",
-      
+
       // 加载状态标志
       clearMemoryLoading: false,
     };
   },
-  
+
   mounted() {
       this.getRole()
       this.getData();
   },
-  
+
   methods: {
     /**
      * 数据获取方法
@@ -281,21 +281,21 @@ export default {
     getData() {
       this.loading = true;
       this.editingKey = "";
-      
+
       // 构建查询参数
       const queryParams = {
         start: this.pagination.page,
         limit: this.pagination.pageSize,
         ...this.query,
       };
-      
+
       // 添加过滤条件
       this.queryFilter.forEach(filter => {
         if (filter.value) {
           queryParams[filter.index] = filter.value;
         }
       });
-      
+
       axios
         .get({
           url: api.device.query,
@@ -333,7 +333,7 @@ export default {
           this.showError();
         });
     },
-    
+
     /**
      * 设备操作方法
      */
@@ -343,7 +343,7 @@ export default {
         this.$message.info("请输入设备编号");
         return;
       }
-      
+
       if(this.roleItems.length == 0) {
         this.$message.warn("请先配置默认角色");
         return;
@@ -368,7 +368,7 @@ export default {
           this.showError();
         });
     },
-    
+
     // 删除设备
     deleteDevice(record) {
       this.loading = true;
@@ -392,7 +392,7 @@ export default {
           this.loading = false;
         });
     },
-    
+
     // 更新设备信息
     update(val, key) {
       if (key) {
@@ -426,7 +426,7 @@ export default {
           this.editingKey = "";
         });
     },
-    
+
     // 清除设备记忆
     clearMemory(record) {
       this.clearMemoryLoading = true;
@@ -450,38 +450,38 @@ export default {
           this.clearMemoryLoading = false;
         });
     },
-    
+
     // 在弹窗中编辑设备
     editWithDialog(device) {
       this.editVisible = true;
       this.currentDevice = { ...device };
     },
-    
+
     // 选择变更处理函数
     handleSelectChange(value, key, type) {
       // 获取编辑中的数据行
       const data = this.editLine(key);
-      
+
       if (type === "role") {
         const role = this.roleItems.find((item) => item.roleId === value);
         const name = role ? role.roleName : "";
-        
+
         // 更新数据
         data.target.roleId = value;
         data.target.roleName = name;
-        
+
         this.data = [...this.data]; // 强制更新视图
       }
     },
-    
+
     // 获取角色名称
     getRoleName(roleId) {
       if (!roleId) return "";
-      
+
       const role = this.roleItems.find(r => r.roleId === roleId);
       return role ? role.roleName : `角色ID:${roleId}`;
     },
-    
+
     // 发送留言到指定设备
     sendMessage(device) {
       try {
@@ -490,7 +490,7 @@ export default {
           this.$message.error(this.$t('device.deviceInfoIncomplete'));
           return;
         }
-        
+
         // 将设备信息存储到sessionStorage，供聊天页面使用
         const deviceInfo = {
           deviceId: device.deviceId,
@@ -498,19 +498,19 @@ export default {
           roleId: device.roleId,
           roleName: device.roleName
         };
-        
+
         sessionStorage.setItem('targetDevice', JSON.stringify(deviceInfo));
-        
+
         // 跳转到聊天页面
         this.$router.push('/chat');
-        
+
         this.$message.success(this.$t('device.sendMessageSuccess', { name: deviceInfo.deviceName }));
       } catch (error) {
         console.error('发送留言失败:', error);
         this.$message.error(this.$t('device.sendMessageFailed'));
       }
     },
-    
+
     // 发送浇水指令到指定设备
     sendWater(device) {
       try {
@@ -519,12 +519,12 @@ export default {
           this.$message.error(this.$t('device.waterDeviceInfoIncomplete'));
           return;
         }
-        
+
         const duration = 30;
-        
+
         // 发送浇水指令，默认30秒
         axios
-          .post({
+          .jsonPost({
             url: api.deviceMessage.water,
             data: {
               deviceId: device.deviceId,
@@ -533,7 +533,7 @@ export default {
           })
           .then((res) => {
             if (res.code === 200) {
-              this.$message.success(this.$t('device.sendWaterSuccess', { 
+              this.$message.success(this.$t('device.sendWaterSuccess', {
                 name: device.deviceName || device.deviceId,
                 duration: duration
               }));

@@ -6,8 +6,9 @@ import { message } from 'ant-design-vue'
 import { useTable } from '@/composables/useTable'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useLoadingStore } from '@/store/loading'
-import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory } from '@/services/device'
+import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory, sendWaterCommand } from '@/services/device'
 import { queryRoles } from '@/services/role'
+import { http } from '@/services/request'
 import DeviceEditDialog from '@/components/DeviceEditDialog.vue'
 import TableActionButtons from '@/components/TableActionButtons.vue'
 import type { Device, DeviceQueryParams, Role } from '@/types/device'
@@ -176,7 +177,7 @@ const columns = computed(() => [
 async function fetchData() {
   // 重置编辑状态
   editingKey.value = ''
-  
+
   await loadData((params) => {
     const queryParams: DeviceQueryParams = {
       start: params.start,
@@ -338,7 +339,7 @@ function handleInputEdit(value: string, key: string, field: 'deviceName') {
  */
 function handleRoleChange(value: number, key: string) {
   const role = roleItems.value.find((item) => item.roleId === value)
-  
+
   if (role) {
     updateField(key, 'roleId', value)
     updateField(key, 'roleName', role.roleName)
@@ -364,7 +365,7 @@ function handleSendMessage(device: Device) {
       message.error(t('device.deviceInfoIncomplete'))
       return
     }
-    
+
     // 将设备信息存储到sessionStorage，供聊天页面使用
     const deviceInfo = {
       deviceId: device.deviceId,
@@ -372,16 +373,54 @@ function handleSendMessage(device: Device) {
       roleId: device.roleId,
       roleName: device.roleName
     }
-    
+
     sessionStorage.setItem('targetDevice', JSON.stringify(deviceInfo))
-    
+
     // 跳转到聊天页面
     router.push('/chat')
-    
+
     message.success(t('device.sendMessageSuccess', { name: deviceInfo.deviceName }))
   } catch (error) {
     console.error('发送留言失败:', error)
     message.error(t('device.sendMessageFailed'))
+  }
+}
+
+/**
+ * 发送浇水指令到指定设备
+ */
+async function handleSendWater(device: Device) {
+  loading.value = true
+  try {
+    // 验证设备信息
+    if (!device || !device.deviceId) {
+      message.error(t('device.deviceInfoIncomplete'))
+      return
+    }
+
+    const duration = 30
+
+    // 发送浇水指令，默认 30 秒
+    const res = await sendWaterCommand({
+      deviceId: device.deviceId,
+      duration,
+    })
+
+    if (res.code === 200) {
+      message.success(
+        t('device.sendWaterSuccess', {
+          name: device.deviceName || device.deviceId,
+          duration,
+        })
+      )
+    } else {
+      message.error(res.message || t('device.sendWaterFailed'))
+    }
+  } catch (error) {
+    console.error('发送浇水指令失败:', error)
+    message.error(t('device.sendWaterFailed'))
+  } finally {
+    loading.value = false
   }
 }
 
@@ -596,6 +635,9 @@ fetchData()
               <template #actions="{ record }">
                 <a @click="() => handleSendMessage(record)" style="color: #1890ff">
                   {{ t('device.sendMessage') }}
+                </a>
+                <a @click="() => handleSendWater(record)" style="color: #52c41a; margin-left: 8px">
+                  {{ t('device.sendWater') }}
                 </a>
               </template>
             </TableActionButtons>
