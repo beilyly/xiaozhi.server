@@ -38,49 +38,11 @@ public class FileDownloadController extends BaseController {
 
     private static final Logger logger = LoggerFactory.getLogger(FileDownloadController.class);
 
-    @Value("${xiaozhi.file.upload-path:}")
-    private String uploadPath;
-
     @Value("${xiaozhi.file.download-url-prefix:}")
     private String downloadUrlPrefix;
 
     @Resource
     private CmsUtils cmsUtils;
-
-    /**
-     * 获取有效的上传路径
-     * 如果配置的路径不可用，则使用当前工程目录下的files文件夹
-     */
-    private String getEffectiveUploadPath() {
-        // 如果配置了路径且目录存在或可创建，则使用配置的路径
-        if (StringUtils.hasText(uploadPath)) {
-            File configDir = new File(uploadPath);
-            if (configDir.exists() || configDir.mkdirs()) {
-                logger.info("使用配置的上传路径: {}", uploadPath);
-                return uploadPath;
-            } else {
-                logger.warn("配置的上传路径不可用: {}", uploadPath);
-            }
-        }
-        
-        // 使用当前工程目录下的files文件夹
-        String currentDir = System.getProperty("user.dir");
-        String fallbackPath = currentDir + File.separator + "files";
-        logger.info("使用默认上传路径: {}", fallbackPath);
-        
-        // 确保默认目录存在
-        File fallbackDir = new File(fallbackPath);
-        if (!fallbackDir.exists()) {
-            boolean created = fallbackDir.mkdirs();
-            if (created) {
-                logger.info("创建默认上传目录成功: {}", fallbackPath);
-            } else {
-                logger.warn("无法创建默认上传目录: {}", fallbackPath);
-            }
-        }
-        
-        return fallbackPath;
-    }
 
     /**
      * 上传固件文件（需要登录）
@@ -115,7 +77,7 @@ public class FileDownloadController extends BaseController {
             }
 
             // 获取有效的上传路径
-            String effectiveUploadPath = getEffectiveUploadPath();
+            String effectiveUploadPath = cmsUtils.getEffectiveUploadPath();
             
             // 创建上传目录
             String datePath = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
@@ -236,7 +198,7 @@ public class FileDownloadController extends BaseController {
             }
 
             List<Map<String, Object>> fileList = new ArrayList<>();
-            String effectiveUploadPath = getEffectiveUploadPath();
+            String effectiveUploadPath = cmsUtils.getEffectiveUploadPath();
             File firmwareDir = new File(effectiveUploadPath + File.separator + "firmware");
 
             if (firmwareDir.exists()) {
@@ -332,7 +294,7 @@ public class FileDownloadController extends BaseController {
      * 查找固件文件
      */
     private File findFirmwareFile(String fileName) {
-        String effectiveUploadPath = getEffectiveUploadPath();
+        String effectiveUploadPath = cmsUtils.getEffectiveUploadPath();
         File firmwareDir = new File(effectiveUploadPath + File.separator + "firmware");
         if (!firmwareDir.exists()) {
             return null;

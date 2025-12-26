@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 
@@ -48,6 +49,9 @@ public class CmsUtils {
 
     @Value("${xiaozhi.firmware.downloadurl}")
     private String defaultFirewareDownloadUrl;
+
+    @Value("${xiaozhi.file.upload-path:}")
+    private String uploadPath;
 
     // 初始化websocketAddress、otaAddress
     @PostConstruct
@@ -134,6 +138,41 @@ public class CmsUtils {
     }
 
     /**
+     * 获取有效的上传路径
+     * 如果配置的路径不可用，则使用当前工程目录下的files文件夹
+     */
+    public String getEffectiveUploadPath() {
+        // 如果配置了路径且目录存在或可创建，则使用配置的路径
+        if (StringUtils.hasText(uploadPath)) {
+            File configDir = new File(uploadPath);
+            if (configDir.exists() || configDir.mkdirs()) {
+                logger.info("使用配置的上传路径: {}", uploadPath);
+                return uploadPath;
+            } else {
+                logger.warn("配置的上传路径不可用: {}", uploadPath);
+            }
+        }
+        
+        // 使用当前工程目录下的files文件夹
+        String currentDir = System.getProperty("user.dir");
+        String fallbackPath = currentDir + File.separator + "files";
+        logger.info("使用默认上传路径: {}", fallbackPath);
+        
+        // 确保默认目录存在
+        File fallbackDir = new File(fallbackPath);
+        if (!fallbackDir.exists()) {
+            boolean created = fallbackDir.mkdirs();
+            if (created) {
+                logger.info("创建默认上传目录成功: {}", fallbackPath);
+            } else {
+                logger.warn("无法创建默认上传目录: {}", fallbackPath);
+            }
+        }
+        
+        return fallbackPath;
+    }
+
+    /**
      * 获取最新的固件下载地址
      * 优先返回最新上传的固件文件下载地址
      * 
@@ -141,8 +180,9 @@ public class CmsUtils {
      */
     public String getLatestFirmwareDownloadUrl() {
         try {
-            // 查找最新的固件文件
-            String firmwareDir = "/app/files/firmware";
+            // 获取有效的上传路径
+            String effectiveUploadPath = getEffectiveUploadPath();
+            String firmwareDir = effectiveUploadPath + File.separator + "firmware";
             File dir = new File(firmwareDir);
             if (!dir.exists()) {
                 return defaultFirewareDownloadUrl; // 如果没有固件文件，返回默认OTA地址

@@ -531,7 +531,7 @@ export default {
     deleteFile(file) {
       // 使用原生confirm作为备选方案
       if (confirm('确定要删除这个固件文件吗？')) {
-        this.$set(file, 'deleting', true)
+        file.deleting = true
         console.log('开始删除文件:', file.fileName)
         
         const deleteUrl = api.firmware.delete + '/' + file.fileName
@@ -542,7 +542,7 @@ export default {
             url: deleteUrl
           })
           .then(res => {
-            this.$set(file, 'deleting', false)
+            file.deleting = false
             console.log('删除响应:', res)
             console.log('删除响应数据:', res.data)
             console.log('删除响应代码:', res.code)
@@ -558,7 +558,7 @@ export default {
               this.$message.error('删除失败: ' + responseMessage)
             }
           }).catch((error) => {
-            this.$set(file, 'deleting', false)
+            file.deleting = false
             console.error('删除失败:', error)
             console.error('删除错误详情:', error.response)
             this.$message.error('删除失败: ' + (error.response ? error.response.data.message : error.message))
