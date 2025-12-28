@@ -1,6 +1,7 @@
 package com.xiaozhi.communication.common;
 
 import com.xiaozhi.communication.domain.*;
+import com.xiaozhi.communication.server.mqtt.MqttSession;
 import com.xiaozhi.communication.server.websocket.WebSocketSession;
 import com.xiaozhi.dialogue.llm.factory.ChatModelFactory;
 import com.xiaozhi.dialogue.llm.memory.Conversation;
@@ -120,7 +121,7 @@ public class MessageHandler {
     private void initializeBoundDevice(ChatSession chatSession, SysDevice device) {
         String deviceId = device.getDeviceId();
         String sessionId = chatSession.getSessionId();
-        
+
         //这里需要放在虚拟线程外
         ToolsSessionHolder toolsSessionHolder = new ToolsSessionHolder(chatSession.getSessionId(),
                 device, toolsGlobalRegistry);
@@ -164,7 +165,7 @@ public class MessageHandler {
                 // 更新设备状态
                 deviceService.update(new SysDevice()
                         .setDeviceId(device.getDeviceId())
-                        .setState(chatSession instanceof WebSocketSession ? SysDevice.DEVICE_STATE_ONLINE : SysDevice.DEVICE_STATE_STANDBY)
+                        .setState(chatSession instanceof WebSocketSession || chatSession instanceof MqttSession ? SysDevice.DEVICE_STATE_ONLINE : SysDevice.DEVICE_STATE_STANDBY)
                         .setLastLogin(new Date().toString()));
 
             } catch (Exception e) {
@@ -240,21 +241,21 @@ public class MessageHandler {
             return false;
         }
         deviceId = device.getDeviceId();
-        
+
         // 检查是否是 user_chat_ 开头的虚拟设备，如果是则自动绑定
         if (deviceId.startsWith("user_chat_")) {
             try {
                 logger.info("检测到虚拟设备 {}，尝试自动绑定", deviceId);
-                
+
                 // 提取用户ID
                 String userIdStr = deviceId.substring("user_chat_".length());
                 Integer userId = Integer.parseInt(userIdStr);
-                
+
                 // 查询用户的默认角色
                 SysRole queryRole = new SysRole();
                 queryRole.setUserId(userId);
                 List<SysRole> roles = roleService.query(queryRole, null);
-                
+
                 Integer defaultRoleId = null;
                 // 查询用户所有角色，只查一次，然后遍历查找默认的，没有默认的取第一个
                 if (roles != null && !roles.isEmpty()) {
@@ -268,7 +269,7 @@ public class MessageHandler {
                         defaultRoleId = roles.get(0).getRoleId();
                     }
                 }
-                
+
                 if (defaultRoleId != null) {
                     // 创建虚拟设备并绑定到默认角色
                     SysDevice virtualDevice = new SysDevice();
@@ -278,20 +279,20 @@ public class MessageHandler {
                     virtualDevice.setType("web");
                     virtualDevice.setState(SysDevice.DEVICE_STATE_ONLINE);
                     virtualDevice.setRoleId(defaultRoleId);
-                    
+
                     // 添加设备
                     int result = deviceService.add(virtualDevice);
-                    
+
                     if (result > 0) {
                         logger.info("虚拟设备 {} 自动绑定成功，角色ID: {}", deviceId, defaultRoleId);
-                        
+
                         // 重新查询设备信息
                         SysDevice boundDevice = deviceService.selectDeviceById(deviceId);
                         if (boundDevice != null) {
                             // 更新会话中的设备信息
                             boundDevice.setSessionId(sessionId);
                             sessionManager.registerDevice(sessionId, boundDevice);
-                            
+
                             // 获取会话对象
                             ChatSession chatSession = sessionManager.getSession(sessionId);
                             if (chatSession != null && chatSession.isOpen()) {
@@ -299,7 +300,7 @@ public class MessageHandler {
                                 initializeBoundDevice(chatSession, boundDevice);
                                 logger.info("虚拟设备 {} 初始化完成，可以开始对话", deviceId);
                             }
-                            
+
                             // 设备已绑定并初始化完成，返回true表示可以继续处理消息
                             return true;
                         }
@@ -315,7 +316,7 @@ public class MessageHandler {
                 logger.error("自动绑定虚拟设备失败: {}", deviceId, e);
             }
         }
-        
+
         ChatSession chatSession = sessionManager.getSession(sessionId);
         if (chatSession == null || !chatSession.isOpen()) {
             return false;
@@ -377,7 +378,7 @@ public class MessageHandler {
                 captchaGenerationInProgress.remove(deviceId);
             }
         });
-        
+
         // 返回false表示需要验证码流程，不继续处理当前消息
         return false;
     }

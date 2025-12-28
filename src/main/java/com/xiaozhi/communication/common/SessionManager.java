@@ -103,7 +103,7 @@ public class SessionManager {
             }, 1, TimeUnit.SECONDS);
 
             // 定期检查不活跃的会话
-            scheduler.scheduleAtFixedRate(this::checkInactiveSessions, 10, 10, TimeUnit.SECONDS);
+            scheduler.scheduleAtFixedRate(this::checkInactiveSessions, 30, 30, TimeUnit.SECONDS);
             logger.info("不活跃会话检查任务已启动，超时时间: {}秒", inactiveTimeOutSeconds);
         }
     }
@@ -134,6 +134,7 @@ public class SessionManager {
         Thread.startVirtualThread(() -> {
             Instant now = Instant.now();
             sessions.values().forEach(session -> {
+                if (session instanceof WebSocketSession){
                 // 检查所有会话类型：WebSocket 会话或 MQTT 会话（有音频通道打开的）
                 if(session.isAudioChannelOpen()) {
                     Instant lastActivity = session.getLastActivityTime();
@@ -147,6 +148,7 @@ public class SessionManager {
                         }
 
                     }
+                }
                 }
             });
         });

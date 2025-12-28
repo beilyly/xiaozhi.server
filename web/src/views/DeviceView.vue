@@ -398,7 +398,7 @@ async function handleSendWater(device: Device) {
       return
     }
 
-    const duration = 30
+    const duration = 10
 
     // 发送浇水指令，默认 30 秒
     const res = await sendWaterCommand({
