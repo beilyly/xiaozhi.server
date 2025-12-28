@@ -18,7 +18,7 @@ services:
       start_period: 30s
 
   node:
-    image: esp32web:4.4
+    image: esp32web:4.5
     depends_on:
       mysql:
         condition: service_healthy
