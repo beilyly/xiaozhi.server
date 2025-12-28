@@ -52,7 +52,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/xiaozhi?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - SPRING_DATASOURCE_USERNAME=xiaozhi
       - SPRING_DATASOURCE_PASSWORD=123456
-      - xiaozhi.firmware.version=2.1.1
+      - xiaozhi.firmware.version=2.1.2
       - XIAOZHI_SSL_SKIP_VERIFICATION=false
       - XIAOZHI_MQTT_EXTERNAL_HOST=8.130.214.215
       - HOST_IP=8.130.214.215   # ← 这里添加
