@@ -9,3 +9,5 @@ audio/
 avatar/
 *.md
 *.log
+npm-debug.log
+.vite

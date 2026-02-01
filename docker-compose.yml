@@ -54,9 +54,9 @@ services:
       - SPRING_DATASOURCE_PASSWORD=123456
       - xiaozhi.firmware.version=2.1.2
       - XIAOZHI_SSL_SKIP_VERIFICATION=false
-      - XIAOZHI_MQTT_EXTERNAL_HOST=8.130.214.215
-      - HOST_IP=8.130.214.215   # ← 这里添加
-      - XIAOZHI_FIRMWARE_DOWNLOADURL=http://8.130.214.215:8091/api/file/firmware/download/firmware_1761054662289.bin
+      - XIAOZHI_MQTT_EXTERNAL_HOST=${SERVER_HOST}
+      - HOST_IP=${SERVER_HOST}
+      - XIAOZHI_FIRMWARE_DOWNLOADURL=http://${SERVER_HOST}:8091/api/file/firmware/download/firmware_1761054662289.bin
     volumes:
       - maven_repo:/root/.m2/repository  # 持久化Maven仓库
       - vosk_models:/vosk_cache  # 持久化Vosk模型
