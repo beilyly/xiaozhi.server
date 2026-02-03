@@ -20,7 +20,7 @@ public class MqttProperties {
     private String topicPrefix = "xiaozhi/device";
     private int keepalive = 240;
     private int udpPortStart = 20000;
-    private int udpPortEnd = 21000;
+    private int udpPortEnd = 20030;
 
     public boolean isEnabled() {
         return enabled;
