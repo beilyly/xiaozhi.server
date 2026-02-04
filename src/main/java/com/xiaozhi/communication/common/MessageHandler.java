@@ -450,6 +450,10 @@ public class MessageHandler {
     }
 
     private void handleGoodbyeMessage(ChatSession session, GoodbyeMessage message) {
+        if (session == null) {
+            // 设备可能在尚未完成 hello/注册会话前就发送 goodbye；此时忽略即可（幂等）。
+            return;
+        }
         sessionManager.closeSession(session);
         if(!(session instanceof WebSocketSession)){
             if (session.getSysDevice() != null) {
@@ -479,6 +483,15 @@ public class MessageHandler {
 
     public void handleMessage(Message msg, String sessionId) {
         var chatSession = sessionManager.getSession(sessionId);
+        if (chatSession == null) {
+            // MQTT 等通道可能在会话尚未注册完成时就收到消息；对 goodbye 做幂等忽略，避免刷异常。
+            if (msg instanceof GoodbyeMessage) {
+                return;
+            }
+            logger.warn("收到消息但会话不存在 - SessionId: {}, MessageType: {}", sessionId,
+                    msg != null ? msg.getClass().getSimpleName() : "null");
+            return;
+        }
         switch (msg) {
             case ListenMessage m -> handleListenMessage(chatSession, m);
             case IotMessage m -> handleIotMessage(chatSession, m);

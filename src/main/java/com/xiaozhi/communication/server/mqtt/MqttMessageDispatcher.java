@@ -125,7 +125,12 @@ public class MqttMessageDispatcher {
             } else {
                 logger.info("MQTT publish parsed as generic Message - clientId: {}, sessionId: {}, messageType: {}",
                         clientId, session.getSessionId(), parsed != null ? parsed.getClass().getSimpleName() : "null");
-                messageHandler.handleMessage(parsed, session.getSessionId());
+                try {
+                    messageHandler.handleMessage(parsed, session.getSessionId());
+                } catch (Exception ex) {
+                    logger.error("Failed to handle MQTT message - clientId: {}, sessionId: {}, payload: {}",
+                            clientId, session.getSessionId(), payload, ex);
+                }
             }
         } catch (Exception ex) {
             logger.error("Failed to parse MQTT payload: {}", payload, ex);
