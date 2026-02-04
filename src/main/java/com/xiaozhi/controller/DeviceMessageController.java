@@ -262,13 +262,20 @@ public class DeviceMessageController extends BaseController {
             if (chatSession != null && chatSession.isOpen()) {
                 // 设备在线，直接发送指令
                 try {
-                    // 构造发送给设备的浇水指令格式
-                    String commandJson = String.format(
+                    // 1. 保持原有 system 指令，兼容旧固件逻辑
+                    String legacyCommandJson = String.format(
                         "{\"type\":\"system\",\"command\":\"water\",\"duration\":%d}",
                         duration
                     );
+                    chatSession.sendTextMessage(legacyCommandJson);
 
-                    chatSession.sendTextMessage(commandJson);
+                    // 2. 额外发送一条 MCP 指令，使用 self.pump.turn_on 工具
+                    long mcpId = System.currentTimeMillis();
+                    String mcpCommandJson = String.format(
+                        "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.pump.turn_on\",\"arguments\":{}}}}",
+                        mcpId
+                    );
+                    chatSession.sendTextMessage(mcpCommandJson);
 
                     // 更新设备状态为在线
                     device.setState("1");
@@ -365,6 +372,108 @@ public class DeviceMessageController extends BaseController {
 
         public void setDuration(Integer duration) {
             this.duration = duration;
+        }
+    }
+
+    /**
+     * 灯光控制指令请求实体
+     */
+    public static class LightCommandRequest {
+        private String deviceId;
+        /**
+         * true=亮灯，false=关灯
+         */
+        private Boolean on;
+
+        public String getDeviceId() {
+            return deviceId;
+        }
+
+        public void setDeviceId(String deviceId) {
+            this.deviceId = deviceId;
+        }
+
+        public Boolean getOn() {
+            return on;
+        }
+
+        public void setOn(Boolean on) {
+            this.on = on;
+        }
+    }
+
+    /**
+     * 发送灯光控制指令到指定设备（通过 MCP）
+     *
+     * @param request 灯光请求（包含设备ID和开关状态）
+     * @return 发送结果
+     */
+    @PostMapping("/light")
+    @ResponseBody
+    public AjaxResult sendLightCommand(@RequestBody LightCommandRequest request) {
+        try {
+            // 验证设备是否存在
+            SysDevice device = deviceService.selectDeviceById(request.getDeviceId());
+            if (device == null) {
+                return AjaxResult.error("设备不存在");
+            }
+
+            if (request.getOn() == null) {
+                return AjaxResult.error("缺少灯光开关参数");
+            }
+
+            logger.info("发送灯光指令到设备: {} - 操作: {}", request.getDeviceId(), request.getOn() ? "亮灯" : "关灯");
+
+            var chatSession = sessionManager.getSessionByDeviceId(request.getDeviceId());
+            if (chatSession != null && chatSession.isOpen()) {
+                try {
+                    // 统一使用 MCP 工具 self.led_strip.*
+                    long baseId = System.currentTimeMillis();
+                    if (Boolean.TRUE.equals(request.getOn())) {
+                        // 亮灯：设置亮度为 5，并设为白色
+                        String brightnessCmd = String.format(
+                            "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":5}}}}",
+                            baseId
+                        );
+                        String colorCmd = String.format(
+                            "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_all_color\",\"arguments\":{\"red\":255,\"green\":255,\"blue\":255}}}}",
+                            baseId + 1
+                        );
+                        chatSession.sendTextMessage(brightnessCmd);
+                        chatSession.sendTextMessage(colorCmd);
+                    } else {
+                        // 关灯：亮度设置为 0
+                        String offCmd = String.format(
+                            "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":0}}}}",
+                            baseId
+                        );
+                        chatSession.sendTextMessage(offCmd);
+                    }
+
+                    // 更新设备状态为在线
+                    device.setState("1");
+                    deviceService.update(device);
+
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("commandId", "light_" + System.currentTimeMillis());
+                    result.put("deviceId", request.getDeviceId());
+                    result.put("status", "sent");
+                    result.put("on", request.getOn());
+                    result.put("timestamp", LocalDateTime.now());
+
+                    logger.info("灯光指令已通过WebSocket发送到设备: {} - 操作: {}", request.getDeviceId(), request.getOn() ? "亮灯" : "关灯");
+                    return AjaxResult.success("灯光指令发送成功", result);
+                } catch (Exception e) {
+                    logger.error("通过WebSocket发送灯光指令失败", e);
+                    return AjaxResult.error("灯光指令发送失败: " + e.getMessage());
+                }
+            } else {
+                logger.warn("设备离线，无法发送灯光指令 - DeviceId: {}", request.getDeviceId());
+                return AjaxResult.error("设备离线，无法发送灯光指令");
+            }
+        } catch (Exception e) {
+            logger.error("发送灯光指令到设备失败", e);
+            return AjaxResult.error("灯光指令发送失败");
         }
     }
 }

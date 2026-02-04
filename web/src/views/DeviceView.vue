@@ -6,7 +6,7 @@ import { message } from 'ant-design-vue'
 import { useTable } from '@/composables/useTable'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useLoadingStore } from '@/store/loading'
-import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory, sendWaterCommand } from '@/services/device'
+import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory, sendWaterCommand, sendLightCommand } from '@/services/device'
 import { queryRoles } from '@/services/role'
 import { http } from '@/services/request'
 import DeviceEditDialog from '@/components/DeviceEditDialog.vue'
@@ -424,6 +424,60 @@ async function handleSendWater(device: Device) {
   }
 }
 
+/**
+ * 亮灯
+ */
+async function handleLightOn(device: Device) {
+  loading.value = true
+  try {
+    if (!device || !device.deviceId) {
+      message.error(t('device.deviceInfoIncomplete'))
+      return
+    }
+    const res = await sendLightCommand({
+      deviceId: device.deviceId,
+      on: true,
+    })
+    if (res.code === 200) {
+      message.success(t('device.lightOnCommandSent'))
+    } else {
+      message.error(res.message || t('device.lightOnCommandFailed'))
+    }
+  } catch (error) {
+    console.error('发送亮灯指令失败:', error)
+    message.error(t('device.lightOnCommandFailed'))
+  } finally {
+    loading.value = false
+  }
+}
+
+/**
+ * 关灯
+ */
+async function handleLightOff(device: Device) {
+  loading.value = true
+  try {
+    if (!device || !device.deviceId) {
+      message.error(t('device.deviceInfoIncomplete'))
+      return
+    }
+    const res = await sendLightCommand({
+      deviceId: device.deviceId,
+      on: false,
+    })
+    if (res.code === 200) {
+      message.success(t('device.lightOffCommandSent'))
+    } else {
+      message.error(res.message || t('device.lightOffCommandFailed'))
+    }
+  } catch (error) {
+    console.error('发送关灯指令失败:', error)
+    message.error(t('device.lightOffCommandFailed'))
+  } finally {
+    loading.value = false
+  }
+}
+
 // 处理分页变化
 const onTableChange = (pag: TablePaginationConfig) => {
   handleTableChange(pag)
@@ -638,6 +692,12 @@ fetchData()
                 </a>
                 <a @click="() => handleSendWater(record)" style="color: #52c41a; margin-left: 8px">
                   {{ t('device.sendWater') }}
+                </a>
+                <a @click="() => handleLightOn(record)" style="color: #faad14; margin-left: 8px">
+                  {{ t('device.lightOn') }}
+                </a>
+                <a @click="() => handleLightOff(record)" style="color: #faad14; margin-left: 8px">
+                  {{ t('device.lightOff') }}
                 </a>
               </template>
             </TableActionButtons>

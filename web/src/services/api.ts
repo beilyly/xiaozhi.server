@@ -45,6 +45,7 @@ export default {
     send: '/device/message/send',
     query: '/device/message/query',
     water: '/device/message/water',
+    light: '/device/message/light',
   },
   config: {
     add: '/config/add',

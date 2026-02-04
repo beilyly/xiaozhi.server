@@ -316,6 +316,12 @@ export default {
     waterCommandSent: '浇水指令发送成功',
     waterCommandFailed: '浇水指令发送失败',
     deviceOffline: '设备离线，无法发送浇水指令',
+    lightOn: '亮灯',
+    lightOff: '关灯',
+    lightOnCommandSent: '亮灯指令发送成功',
+    lightOnCommandFailed: '亮灯指令发送失败',
+    lightOffCommandSent: '关灯指令发送成功',
+    lightOffCommandFailed: '关灯指令发送失败',
   },
 
   role: {

@@ -7,6 +7,7 @@ import com.xiaozhi.communication.common.SessionManager;
 import com.xiaozhi.communication.domain.AudioParams;
 import com.xiaozhi.communication.domain.HelloFeatures;
 import com.xiaozhi.communication.domain.HelloMessage;
+import com.xiaozhi.communication.domain.GoodbyeMessage;
 import com.xiaozhi.communication.domain.Message;
 import com.xiaozhi.dialogue.llm.tool.mcp.device.DeviceMcpService;
 import com.xiaozhi.entity.SysDevice;
@@ -123,8 +124,14 @@ public class MqttMessageDispatcher {
                 logger.info("MQTT publish parsed as HelloMessage - clientId: {}, sessionId: {}", clientId, session.getSessionId());
                 handleHelloMessage(session, helloMessage);
             } else {
-                logger.info("MQTT publish parsed as generic Message - clientId: {}, sessionId: {}, messageType: {}",
-                        clientId, session.getSessionId(), parsed != null ? parsed.getClass().getSimpleName() : "null");
+                if (parsed instanceof GoodbyeMessage) {
+                    // goodbye 消息比较频繁，降低日志级别，避免刷屏
+                    logger.debug("MQTT publish parsed as GoodbyeMessage - clientId: {}, sessionId: {}",
+                            clientId, session.getSessionId());
+                } else {
+                    logger.info("MQTT publish parsed as generic Message - clientId: {}, sessionId: {}, messageType: {}",
+                            clientId, session.getSessionId(), parsed != null ? parsed.getClass().getSimpleName() : "null");
+                }
                 try {
                     messageHandler.handleMessage(parsed, session.getSessionId());
                 } catch (Exception ex) {

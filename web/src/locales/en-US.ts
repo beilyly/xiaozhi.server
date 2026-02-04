@@ -316,6 +316,12 @@ export default {
     waterCommandSent: 'Water command sent successfully',
     waterCommandFailed: 'Failed to send water command',
     deviceOffline: 'Device offline, unable to send water command',
+    lightOn: 'Light On',
+    lightOff: 'Light Off',
+    lightOnCommandSent: 'Light on command sent successfully',
+    lightOnCommandFailed: 'Failed to send light on command',
+    lightOffCommandSent: 'Light off command sent successfully',
+    lightOffCommandFailed: 'Failed to send light off command',
   },
 
   role: {

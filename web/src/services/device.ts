@@ -35,6 +35,13 @@ export function sendWaterCommand(params: { deviceId: string; duration: number })
 }
 
 /**
+ * 发送灯光控制指令到指定设备
+ */
+export function sendLightCommand(params: { deviceId: string; on: boolean }) {
+  return http.postJSON(api.deviceMessage.light, params)
+}
+
+/**
  * 删除设备
  */
 export function deleteDevice(deviceId: string) {
