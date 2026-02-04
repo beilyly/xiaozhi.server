@@ -54,8 +54,76 @@ public class DeviceMcpService {
         if (chatSession.getDeviceMcpHolder().isMcpInitialized()) {
             //2、获取工具列表
             sendToolsList(chatSession);
+            //3、注册水泵与灯带固定工具（与设备端 MCP 约定一致，见 docs/device-mcp-control.md）
+            registerPumpAndLedStripTools(chatSession);
         }
     }
+
+    /**
+     * 注册水泵与灯带 MCP 工具，用于下发 self.pump.* / self.led_strip.* 的 tools/call 指令。
+     */
+    private void registerPumpAndLedStripTools(ChatSession chatSession) {
+        int existingCount = chatSession.getToolCallbacks().size();
+        if (existingCount + 11 > maxToolsCount) {
+            logger.debug("SessionId: {}, skip pump/led_strip tools, tool count limit reached", chatSession.getSessionId());
+            return;
+        }
+        List<ToolDef> tools = List.of(
+            new ToolDef("self.pump.turn_on", "启动水泵（全速）", "{}"),
+            new ToolDef("self.pump.turn_off", "关闭水泵", "{}"),
+            new ToolDef("self.pump.set_duty", "设置水泵占空比0-100%", "{\"type\":\"object\",\"properties\":{\"duty\":{\"type\":\"integer\",\"description\":\"占空比0-100\"}}}"),
+            new ToolDef("self.pump.get_status", "查询水泵状态", "{}"),
+            new ToolDef("self.led_strip.set_brightness", "设置灯带亮度等级0-8（0=关）", "{\"type\":\"object\",\"properties\":{\"level\":{\"type\":\"integer\",\"description\":\"亮度0-8\"}}}"),
+            new ToolDef("self.led_strip.get_brightness", "获取灯带亮度", "{}"),
+            new ToolDef("self.led_strip.set_all_color", "全部LED同色，RGB 0-255", "{\"type\":\"object\",\"properties\":{\"red\":{\"type\":\"integer\"},\"green\":{\"type\":\"integer\"},\"blue\":{\"type\":\"integer\"}}}"),
+            new ToolDef("self.led_strip.set_single_color", "单个LED颜色，index 0-7", "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"integer\"},\"red\":{\"type\":\"integer\"},\"green\":{\"type\":\"integer\"},\"blue\":{\"type\":\"integer\"}}}"),
+            new ToolDef("self.led_strip.blink", "灯带闪烁，interval 100-5000ms", "{\"type\":\"object\",\"properties\":{\"red\":{\"type\":\"integer\"},\"green\":{\"type\":\"integer\"},\"blue\":{\"type\":\"integer\"},\"interval\":{\"type\":\"integer\"}}}"),
+            new ToolDef("self.led_strip.scroll", "跑马灯，length 1-8，interval 50-2000ms", "{\"type\":\"object\",\"properties\":{\"red\":{\"type\":\"integer\"},\"green\":{\"type\":\"integer\"},\"blue\":{\"type\":\"integer\"},\"length\":{\"type\":\"integer\"},\"interval\":{\"type\":\"integer\"}}}"),
+            new ToolDef("self.led_strip.breathe", "呼吸灯，interval 10-500ms", "{\"type\":\"object\",\"properties\":{\"red\":{\"type\":\"integer\"},\"green\":{\"type\":\"integer\"},\"blue\":{\"type\":\"integer\"},\"interval\":{\"type\":\"integer\"}}}")
+        );
+        for (ToolDef def : tools) {
+            ToolCallback toolCallback = buildMcpToolCallback(chatSession, def.name, def.description, def.inputSchema);
+            String funcName = "mcp_" + def.name.replace(".", "_");
+            chatSession.getToolsSessionHolder().registerFunction(funcName, toolCallback);
+        }
+        logger.debug("SessionId: {}, pump and led_strip MCP tools registered", chatSession.getSessionId());
+    }
+
+    private ToolCallback buildMcpToolCallback(ChatSession chatSession, String name, String description, String inputSchema) {
+        return FunctionToolCallback
+            .builder("mcp_" + name.replace(".", "_"), (Map<String, Object> params, ToolContext toolContext) -> {
+                DeviceMcpMessage request = new DeviceMcpMessage();
+                request.setSessionId(chatSession.getSessionId());
+                DeviceMcpPayload requestPayload = new DeviceMcpPayload();
+                requestPayload.setMethod("tools/call");
+                requestPayload.setId(chatSession.getDeviceMcpHolder().getMcpRequestId());
+                requestPayload.setParams(Map.of(
+                    "name", name,
+                    "arguments", params != null ? params : Map.of()
+                ));
+                request.setPayload(requestPayload);
+                DeviceMcpMessage response = sendMcpRequest(chatSession, request);
+                if (response != null) {
+                    logger.info("SessionId: {}, MCP tools/call response: {}", chatSession.getSessionId(), response);
+                    if (response.getPayload().getResult() == null) {
+                        return response.getPayload().getError() != null ? response.getPayload().getError().get("message") : "未知错误";
+                    }
+                    if ("false".equals(String.valueOf(response.getPayload().getResult().get("isError")))) {
+                        return response.getPayload().getResult().get("content");
+                    }
+                    return response.getPayload().getError();
+                }
+                return "操作失败";
+            })
+            .toolMetadata(ToolMetadata.builder().returnDirect(false).build())
+            .description(description)
+            .inputSchema(inputSchema)
+            .inputType(Map.class)
+            .toolCallResultConverter(ToolCallStringResultConverter.INSTANCE)
+            .build();
+    }
+
+    private record ToolDef(String name, String description, String inputSchema) {}
 
     /**
      * 发送初始化命令
