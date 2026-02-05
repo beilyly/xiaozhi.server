@@ -443,12 +443,17 @@ public class DeviceMessageController extends BaseController {
                         chatSession.sendTextMessage(brightnessCmd);
                         chatSession.sendTextMessage(colorCmd);
                     } else {
-                        // 关灯：亮度设置为 0
-                        String offCmd = String.format(
+                        // 关灯：为了兼容设备实现，同时将亮度设为 0 且颜色设为全黑
+                        String offBrightnessCmd = String.format(
                             "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":0}}}}",
                             sessionId, baseId
                         );
-                        chatSession.sendTextMessage(offCmd);
+                        String offColorCmd = String.format(
+                            "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_all_color\",\"arguments\":{\"red\":0,\"green\":0,\"blue\":0}}}}",
+                            sessionId, baseId + 1
+                        );
+                        chatSession.sendTextMessage(offBrightnessCmd);
+                        chatSession.sendTextMessage(offColorCmd);
                     }
 
                     // 更新设备状态为在线
