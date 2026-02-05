@@ -322,6 +322,9 @@ export default {
     lightOnCommandFailed: 'Failed to send light on command',
     lightOffCommandSent: 'Light off command sent successfully',
     lightOffCommandFailed: 'Failed to send light off command',
+    pumpStop: 'Stop Pump',
+    pumpStopCommandSent: 'Stop pump command sent successfully',
+    pumpStopCommandFailed: 'Failed to send stop pump command',
   },
 
   role: {

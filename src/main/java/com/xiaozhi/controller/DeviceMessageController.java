@@ -269,11 +269,11 @@ public class DeviceMessageController extends BaseController {
                     );
                     chatSession.sendTextMessage(legacyCommandJson);
 
-                    // 2. 额外发送一条 MCP 指令，使用 self.pump.turn_on 工具
+                    // 2. 额外发送一条 MCP 指令，使用 self.pump.turn_on 工具（带 sessionId 与语音控制一致，设备端才处理）
                     long mcpId = System.currentTimeMillis();
                     String mcpCommandJson = String.format(
-                        "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.pump.turn_on\",\"arguments\":{}}}}",
-                        mcpId
+                        "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.pump.turn_on\",\"arguments\":{}}}}",
+                        chatSession.getSessionId(), mcpId
                     );
                     chatSession.sendTextMessage(mcpCommandJson);
 
@@ -427,25 +427,26 @@ public class DeviceMessageController extends BaseController {
             var chatSession = sessionManager.getSessionByDeviceId(request.getDeviceId());
             if (chatSession != null && chatSession.isOpen()) {
                 try {
-                    // 统一使用 MCP 工具 self.led_strip.*
+                    // 统一使用 MCP 工具 self.led_strip.*（带 sessionId 与语音控制一致，设备端才处理）
+                    String sessionId = chatSession.getSessionId();
                     long baseId = System.currentTimeMillis();
                     if (Boolean.TRUE.equals(request.getOn())) {
                         // 亮灯：设置亮度为 5，并设为白色
                         String brightnessCmd = String.format(
-                            "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":5}}}}",
-                            baseId
+                            "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":5}}}}",
+                            sessionId, baseId
                         );
                         String colorCmd = String.format(
-                            "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_all_color\",\"arguments\":{\"red\":255,\"green\":255,\"blue\":255}}}}",
-                            baseId + 1
+                            "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_all_color\",\"arguments\":{\"red\":255,\"green\":255,\"blue\":255}}}}",
+                            sessionId, baseId + 1
                         );
                         chatSession.sendTextMessage(brightnessCmd);
                         chatSession.sendTextMessage(colorCmd);
                     } else {
                         // 关灯：亮度设置为 0
                         String offCmd = String.format(
-                            "{\"type\":\"mcp\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":0}}}}",
-                            baseId
+                            "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.led_strip.set_brightness\",\"arguments\":{\"level\":0}}}}",
+                            sessionId, baseId
                         );
                         chatSession.sendTextMessage(offCmd);
                     }
@@ -474,6 +475,61 @@ public class DeviceMessageController extends BaseController {
         } catch (Exception e) {
             logger.error("发送灯光指令到设备失败", e);
             return AjaxResult.error("灯光指令发送失败");
+        }
+    }
+
+    /**
+     * 发送停止水泵指令到指定设备（通过 MCP self.pump.turn_off）
+     *
+     * @param request 仅需 deviceId
+     * @return 发送结果
+     */
+    @PostMapping("/pump/stop")
+    @ResponseBody
+    public AjaxResult sendPumpStopCommand(@RequestBody PumpStopRequest request) {
+        try {
+            SysDevice device = deviceService.selectDeviceById(request.getDeviceId());
+            if (device == null) {
+                return AjaxResult.error("设备不存在");
+            }
+            var chatSession = sessionManager.getSessionByDeviceId(request.getDeviceId());
+            if (chatSession == null || !chatSession.isOpen()) {
+                logger.warn("设备离线，无法发送停止水泵指令 - DeviceId: {}", request.getDeviceId());
+                return AjaxResult.error("设备离线，无法发送停止水泵指令");
+            }
+            long mcpId = System.currentTimeMillis();
+            String mcpCommandJson = String.format(
+                "{\"type\":\"mcp\",\"sessionId\":\"%s\",\"payload\":{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"tools/call\",\"params\":{\"name\":\"self.pump.turn_off\",\"arguments\":{}}}}",
+                chatSession.getSessionId(), mcpId
+            );
+            chatSession.sendTextMessage(mcpCommandJson);
+            device.setState("1");
+            deviceService.update(device);
+            Map<String, Object> result = new HashMap<>();
+            result.put("commandId", "pump_stop_" + System.currentTimeMillis());
+            result.put("deviceId", request.getDeviceId());
+            result.put("status", "sent");
+            result.put("timestamp", LocalDateTime.now());
+            logger.info("停止水泵指令已发送到设备: {}", request.getDeviceId());
+            return AjaxResult.success("停止水泵指令发送成功", result);
+        } catch (Exception e) {
+            logger.error("发送停止水泵指令到设备失败", e);
+            return AjaxResult.error("停止水泵指令发送失败");
+        }
+    }
+
+    /**
+     * 停止水泵请求实体
+     */
+    public static class PumpStopRequest {
+        private String deviceId;
+
+        public String getDeviceId() {
+            return deviceId;
+        }
+
+        public void setDeviceId(String deviceId) {
+            this.deviceId = deviceId;
         }
     }
 }

@@ -42,6 +42,13 @@ export function sendLightCommand(params: { deviceId: string; on: boolean }) {
 }
 
 /**
+ * 发送停止水泵指令到指定设备
+ */
+export function sendPumpStopCommand(params: { deviceId: string }) {
+  return http.postJSON(api.deviceMessage.pumpStop, params)
+}
+
+/**
  * 删除设备
  */
 export function deleteDevice(deviceId: string) {

@@ -46,6 +46,7 @@ export default {
     query: '/device/message/query',
     water: '/device/message/water',
     light: '/device/message/light',
+    pumpStop: '/device/message/pump/stop',
   },
   config: {
     add: '/config/add',

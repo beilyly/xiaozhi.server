@@ -6,7 +6,7 @@ import { message } from 'ant-design-vue'
 import { useTable } from '@/composables/useTable'
 import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useLoadingStore } from '@/store/loading'
-import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory, sendWaterCommand, sendLightCommand } from '@/services/device'
+import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory, sendWaterCommand, sendLightCommand, sendPumpStopCommand } from '@/services/device'
 import { queryRoles } from '@/services/role'
 import { http } from '@/services/request'
 import DeviceEditDialog from '@/components/DeviceEditDialog.vue'
@@ -94,6 +94,10 @@ const clearMemoryLoading = ref(false)
 // 添加设备输入框
 const addDeviceCode = ref('')
 const addDeviceLoading = ref(false)
+
+// 水泵/灯 前端切换状态（按设备，默认关/关，点击后切换）
+const pumpOnMap = ref<Record<string, boolean>>({})
+const lightOnMap = ref<Record<string, boolean>>({})
 
 // 表格列配置
 const columns = computed(() => [
@@ -386,93 +390,59 @@ function handleSendMessage(device: Device) {
   }
 }
 
-/**
- * 发送浇水指令到指定设备
- */
-async function handleSendWater(device: Device) {
+/** 灯：点击切换开/关 */
+async function handleLightToggle(device: Device) {
+  if (!device?.deviceId) {
+    message.error(t('device.deviceInfoIncomplete'))
+    return
+  }
+  const nextOn = !lightOnMap.value[device.deviceId]
   loading.value = true
   try {
-    // 验证设备信息
-    if (!device || !device.deviceId) {
-      message.error(t('device.deviceInfoIncomplete'))
-      return
-    }
-
-    const duration = 10
-
-    // 发送浇水指令，默认 30 秒
-    const res = await sendWaterCommand({
-      deviceId: device.deviceId,
-      duration,
-    })
-
+    const res = await sendLightCommand({ deviceId: device.deviceId, on: nextOn })
     if (res.code === 200) {
-      message.success(
-        t('device.sendWaterSuccess', {
-          name: device.deviceName || device.deviceId,
-          duration,
-        })
-      )
+      lightOnMap.value[device.deviceId] = nextOn
+      message.success(nextOn ? t('device.lightOnCommandSent') : t('device.lightOffCommandSent'))
     } else {
-      message.error(res.message || t('device.sendWaterFailed'))
+      message.error(res.message || (nextOn ? t('device.lightOnCommandFailed') : t('device.lightOffCommandFailed')))
     }
   } catch (error) {
-    console.error('发送浇水指令失败:', error)
-    message.error(t('device.sendWaterFailed'))
+    console.error('发送灯光指令失败:', error)
+    message.error(nextOn ? t('device.lightOnCommandFailed') : t('device.lightOffCommandFailed'))
   } finally {
     loading.value = false
   }
 }
 
-/**
- * 亮灯
- */
-async function handleLightOn(device: Device) {
-  loading.value = true
-  try {
-    if (!device || !device.deviceId) {
-      message.error(t('device.deviceInfoIncomplete'))
-      return
-    }
-    const res = await sendLightCommand({
-      deviceId: device.deviceId,
-      on: true,
-    })
-    if (res.code === 200) {
-      message.success(t('device.lightOnCommandSent'))
-    } else {
-      message.error(res.message || t('device.lightOnCommandFailed'))
-    }
-  } catch (error) {
-    console.error('发送亮灯指令失败:', error)
-    message.error(t('device.lightOnCommandFailed'))
-  } finally {
-    loading.value = false
+/** 水泵：点击切换开/关 */
+async function handlePumpToggle(device: Device) {
+  if (!device?.deviceId) {
+    message.error(t('device.deviceInfoIncomplete'))
+    return
   }
-}
-
-/**
- * 关灯
- */
-async function handleLightOff(device: Device) {
+  const isOn = pumpOnMap.value[device.deviceId]
   loading.value = true
   try {
-    if (!device || !device.deviceId) {
-      message.error(t('device.deviceInfoIncomplete'))
-      return
-    }
-    const res = await sendLightCommand({
-      deviceId: device.deviceId,
-      on: false,
-    })
-    if (res.code === 200) {
-      message.success(t('device.lightOffCommandSent'))
+    if (isOn) {
+      const res = await sendPumpStopCommand({ deviceId: device.deviceId })
+      if (res.code === 200) {
+        pumpOnMap.value[device.deviceId] = false
+        message.success(t('device.pumpStopCommandSent'))
+      } else {
+        message.error(res.message || t('device.pumpStopCommandFailed'))
+      }
     } else {
-      message.error(res.message || t('device.lightOffCommandFailed'))
+      const res = await sendWaterCommand({ deviceId: device.deviceId, duration: 10 })
+      if (res.code === 200) {
+        pumpOnMap.value[device.deviceId] = true
+        message.success(t('device.sendWaterSuccess', { name: device.deviceName || device.deviceId, duration: 10 }))
+      } else {
+        message.error(res.message || t('device.sendWaterFailed'))
+      }
     }
   } catch (error) {
-    console.error('发送关灯指令失败:', error)
-    message.error(t('device.lightOffCommandFailed'))
+    console.error(isOn ? '发送停止水泵指令失败:' : '发送浇水指令失败:', error)
+    message.error(isOn ? t('device.pumpStopCommandFailed') : t('device.sendWaterFailed'))
   } finally {
     loading.value = false
   }
@@ -690,14 +660,11 @@ fetchData()
                 <a @click="() => handleSendMessage(record)" style="color: #1890ff">
                   {{ t('device.sendMessage') }}
                 </a>
-                <a @click="() => handleSendWater(record)" style="color: #52c41a; margin-left: 8px">
-                  {{ t('device.sendWater') }}
+                <a @click="() => handlePumpToggle(record)" style="color: #52c41a; margin-left: 8px">
+                  {{ pumpOnMap[record.deviceId] ? t('device.pumpStop') : t('device.sendWater') }}
                 </a>
-                <a @click="() => handleLightOn(record)" style="color: #faad14; margin-left: 8px">
-                  {{ t('device.lightOn') }}
-                </a>
-                <a @click="() => handleLightOff(record)" style="color: #faad14; margin-left: 8px">
-                  {{ t('device.lightOff') }}
+                <a @click="() => handleLightToggle(record)" style="color: #faad14; margin-left: 8px">
+                  {{ lightOnMap[record.deviceId] ? t('device.lightOff') : t('device.lightOn') }}
                 </a>
               </template>
             </TableActionButtons>

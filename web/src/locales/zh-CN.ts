@@ -322,6 +322,9 @@ export default {
     lightOnCommandFailed: '亮灯指令发送失败',
     lightOffCommandSent: '关灯指令发送成功',
     lightOffCommandFailed: '关灯指令发送失败',
+    pumpStop: '停止水泵',
+    pumpStopCommandSent: '停止水泵指令发送成功',
+    pumpStopCommandFailed: '停止水泵指令发送失败',
   },
 
   role: {
