@@ -6,10 +6,24 @@
 
       <div class="header-title">
         {{ chatTitle }}
-        <a-tag v-if="targetDevice" color="blue">设备留言</a-tag>
+        <a-tag v-if="targetDevice" color="blue">{{ t('chat.deviceMessageTag') }}</a-tag>
       </div>
 
-      <div class="header-right" />
+      <div class="header-right">
+        <a-dropdown v-if="targetDevice">
+          <template #overlay>
+            <a-menu>
+              <a-menu-item key="markAll" @click="handleMarkAllRead">
+                <a-icon type="check-circle" />
+                {{ t('chat.markAllRead') }}
+              </a-menu-item>
+            </a-menu>
+          </template>
+          <a-button type="text">
+            <a-icon type="more" />
+          </a-button>
+        </a-dropdown>
+      </div>
     </div>
 
     <!-- 目标设备信息显示 -->
@@ -25,7 +39,7 @@
       </a-card>
     </div>
 
-    <!-- 聊天区域（本地消息 + 文本输入） -->
+    <!-- 聊天区域（历史 + 本地消息，含已读状态） -->
     <div class="chat-content">
       <a-empty v-if="messages.length === 0" :description="emptyText" />
       <div v-else class="message-list">
@@ -33,11 +47,19 @@
           <a-avatar :src="userAvatar" size="large" class="message-avatar" />
           <div class="message-body">
             <div class="message-meta">
-              <span class="message-from">me</span>
+              <span class="message-from">{{ t('chat.senderMe') }}</span>
               <span class="message-time">{{ formatTime(msg.timestamp) }}</span>
             </div>
             <div class="message-bubble">
               {{ msg.content }}
+            </div>
+            <!-- 已读/未读（设备留言页） -->
+            <div class="message-read-status">
+              <a-tag v-if="msg.read === true" color="default" size="small">{{ t('chat.read') }}</a-tag>
+              <template v-else>
+                <a-tag color="orange" size="small">{{ t('chat.unread') }}</a-tag>
+                <a-button type="link" size="small" class="mark-read-btn" @click="handleMarkRead(msg)">{{ t('chat.markRead') }}</a-button>
+              </template>
             </div>
           </div>
         </div>
@@ -58,7 +80,7 @@
           :disabled="!canSend"
           @click="handleClickSend"
         >
-          发送
+          {{ t('chat.sendButton') }}
         </a-button>
       </div>
     </div>
@@ -71,8 +93,10 @@ import { message } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
 import axios from '@/services/axios'
 import api from '@/services/api'
+import { useUserStore } from '@/store/user'
 
 const { t } = useI18n()
+const userStore = useUserStore()
 
 type DeviceInfo = {
   deviceId: string
@@ -81,20 +105,24 @@ type DeviceInfo = {
   roleName?: string
 }
 
+type MessageItem = {
+  id: string
+  content: string
+  type: 'text'
+  isUser: boolean
+  timestamp: Date
+  isLoading: boolean
+  read?: boolean
+}
+
 // 目标设备信息
 const targetDevice = ref<DeviceInfo | null>(null)
 
-// 本地消息列表（只记录用户发送的内容）
-const messages = ref<
-  {
-    id: string
-    content: string
-    type: 'text'
-    isUser: boolean
-    timestamp: Date
-    isLoading: boolean
-  }[]
->([])
+// 消息列表（含已读状态，支持历史加载）
+const messages = ref<MessageItem[]>([])
+
+// 本次会话是否已因“全部已读”发送过 standby
+const deviceStandbySentForSession = ref(false)
 
 // 输入框内容
 const inputMessage = ref('')
@@ -151,21 +179,147 @@ function loadTargetDevice() {
       roleName: parsed.roleName
     }
 
-    // 用完即删，避免污染后续会话
     sessionStorage.removeItem('targetDevice')
-
-    message.success(t('chat.switchToDeviceSuccess', { name: targetDevice.value.deviceName }))
+    deviceStandbySentForSession.value = false
+    loadDeviceHistory()
+    message.success(t('chat.switchToDeviceSuccess', { name: targetDevice.value!.deviceName }))
   } catch (err) {
     console.error('解析目标设备信息失败:', err)
-    message.error('加载设备信息失败')
+    message.error(t('chat.loadDeviceFailed'))
     sessionStorage.removeItem('targetDevice')
+  }
+}
+
+function getDeviceStorageKey(): string | null {
+  if (!targetDevice.value?.deviceId) return null
+  const u = userStore.userInfo
+  const userId = String(u?.userId ?? (u as { id?: string } | null)?.id ?? 'anonymous')
+  return `device_chat_${userId}_${targetDevice.value.deviceId}`
+}
+
+// 加载该设备的历史消息：先读 localStorage，再请求 query 接口
+function loadDeviceHistory() {
+  const key = getDeviceStorageKey()
+  if (!key) return
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      const { messages: list = [] } = JSON.parse(raw)
+      messages.value = (list || []).map((m: MessageItem & { timestamp?: string }) => ({
+        ...m,
+        timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+        read: m.read === undefined ? true : m.read
+      }))
+    } else {
+      messages.value = []
+    }
+    const deviceId = targetDevice.value?.deviceId
+    if (deviceId) {
+      axios.get({ url: api.deviceMessage.query, data: { deviceId } })
+        .then((res: any) => {
+          if (res?.code === 200 && Array.isArray(res?.data?.messages)) {
+            if ((res.data.messages as any[]).length > 0) {
+              messages.value = (res.data.messages as any[]).map((m: any) => ({
+                id: m.id || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                content: m.content ?? '',
+                type: 'text' as const,
+                isUser: !!m.isUser,
+                timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                isLoading: false,
+                read: !!m.read
+              }))
+              saveDeviceMessages()
+            }
+          }
+        })
+        .catch(() => {})
+    }
+  } catch (e) {
+    messages.value = []
+  }
+}
+
+function saveDeviceMessages() {
+  const key = getDeviceStorageKey()
+  if (!key) return
+  try {
+    const list = messages.value.map((m) => ({
+      ...m,
+      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp
+    }))
+    localStorage.setItem(key, JSON.stringify({ messages: list, updatedAt: new Date().toISOString() }))
+  } catch (_) {}
+}
+
+async function handleMarkRead(msg: MessageItem) {
+  const idx = messages.value.findIndex((m) => m.id === msg.id)
+  if (idx === -1) return
+  if (!targetDevice.value?.deviceId) return
+  try {
+    await axios.jsonPost({
+      url: api.deviceMessage.read,
+      data: { deviceId: targetDevice.value.deviceId, messageId: msg.id }
+    })
+  } catch (_) {
+    message.error(t('chat.sendFailedRetry'))
+    return
+  }
+  messages.value = messages.value.map((item, i) =>
+    i === idx ? { ...item, read: true as const } : item
+  )
+  saveDeviceMessages()
+  checkAllReadAndSendStandby()
+}
+
+async function handleMarkAllRead() {
+  if (!targetDevice.value?.deviceId) return
+  const unreadIds = messages.value.filter((m) => m.read !== true).map((m) => m.id)
+  for (const messageId of unreadIds) {
+    try {
+      await axios.jsonPost({
+        url: api.deviceMessage.read,
+        data: { deviceId: targetDevice.value.deviceId, messageId }
+      })
+    } catch (_) {
+      message.error(t('chat.sendFailedRetry'))
+      return
+    }
+  }
+  messages.value = messages.value.map((m) => ({ ...m, read: true }))
+  saveDeviceMessages()
+  checkAllReadAndSendStandby()
+  message.success(t('chat.markAllReadSuccess'))
+}
+
+function checkAllReadAndSendStandby() {
+  if (!targetDevice.value || deviceStandbySentForSession.value) return
+  if (messages.value.length === 0) return
+  // 必须全部为已读才发送 standby
+  const allRead = messages.value.every((m) => m.read === true)
+  if (!allRead) return
+  void sendStandbyCommand()
+}
+
+async function sendStandbyCommand() {
+  if (!targetDevice.value || deviceStandbySentForSession.value) return
+  try {
+    const res: any = await axios.jsonPost({
+      url: api.deviceMessage.standby,
+      data: { deviceId: targetDevice.value.deviceId }
+    })
+    if (res?.code === 200) {
+      deviceStandbySentForSession.value = true
+      message.success(t('chat.standbySentSuccess'))
+    }
+  } catch (_) {
+    message.error(t('chat.standbySendFailed'))
   }
 }
 
 // 发送留言到设备
 async function sendMessageToDevice(content: string) {
   if (!targetDevice.value) {
-    message.error('目标设备信息不存在，无法发送留言')
+    message.error(t('chat.noTargetDevice'))
     return
   }
 
@@ -182,17 +336,20 @@ async function sendMessageToDevice(content: string) {
 
     if (response.code === 200) {
       message.success(t('chat.sendSuccess'))
-      // 本地追加一条用户消息
-      messages.value.push({
+      const newMsg: MessageItem = {
         id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         content,
         type: 'text',
         isUser: true,
         timestamp: new Date(),
-        isLoading: false
-      })
+        isLoading: false,
+        read: false as const
+      }
+      messages.value = [...messages.value.map((m) => ({ ...m, read: true })), newMsg]
+      saveDeviceMessages()
+      checkAllReadAndSendStandby()
     } else {
-      message.error(response.message || '消息发送失败')
+      message.error(response.message || t('chat.sendFailedRetry'))
     }
   } catch (err) {
     console.error('发送消息到设备失败:', err)
@@ -368,6 +525,19 @@ onMounted(() => {
   color: #1a2b4b;
   word-break: break-word;
   border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.message-read-status {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark-read-btn {
+  padding: 0 4px;
+  font-size: 12px;
+  height: auto;
 }
 
 .chat-input-area {

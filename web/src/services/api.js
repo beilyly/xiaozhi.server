@@ -42,6 +42,8 @@ export default {
   deviceMessage: {
     send: "/api/device/message/send",
     query: "/api/device/message/query",
+    read: "/api/device/message/read",
+    standby: "/api/device/message/standby",
     water: "/api/device/message/water"
   },
   config: {

@@ -147,6 +147,7 @@ export default {
   chat: {
     deviceTitle: '设备留言',
     deviceTitleWithName: '与 {name} 的对话',
+    deviceMessageTag: '设备留言',
     inputPlaceholder: '请选择设备后再发送消息',
     inputPlaceholderWithName: '向 {name} 发送消息...',
     emptyText: '暂无设备信息，无法发送留言',
@@ -154,6 +155,17 @@ export default {
     switchToDeviceSuccess: '已切换到设备 {name} 的留言模式',
     sendSuccess: '消息发送成功',
     sendFailedRetry: '消息发送失败，请重试',
+    sendButton: '发送',
+    markAllRead: '全部标为已读',
+    read: '已读',
+    unread: '未读',
+    markRead: '标记已读',
+    markAllReadSuccess: '已全部标为已读',
+    standbySentSuccess: '已发送待命指令，设备将切换至待命界面',
+    standbySendFailed: '发送待命指令失败',
+    senderMe: '我',
+    loadDeviceFailed: '加载设备信息失败',
+    noTargetDevice: '目标设备信息不存在，无法发送留言',
   },
 
   upload: {

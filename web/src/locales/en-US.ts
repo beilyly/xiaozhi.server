@@ -147,6 +147,7 @@ export default {
   chat: {
     deviceTitle: 'Device Message',
     deviceTitleWithName: 'Chat with {name}',
+    deviceMessageTag: 'Device Message',
     inputPlaceholder: 'Please select a device before sending a message',
     inputPlaceholderWithName: 'Send a message to {name}...',
     emptyText: 'No device information, unable to send message',
@@ -154,6 +155,17 @@ export default {
     switchToDeviceSuccess: 'Switched to device {name} message mode',
     sendSuccess: 'Message sent successfully',
     sendFailedRetry: 'Failed to send message, please try again',
+    sendButton: 'Send',
+    markAllRead: 'Mark all as read',
+    read: 'Read',
+    unread: 'Unread',
+    markRead: 'Mark as read',
+    markAllReadSuccess: 'All marked as read',
+    standbySentSuccess: 'Standby command sent, device will switch to standby screen',
+    standbySendFailed: 'Failed to send standby command',
+    senderMe: 'Me',
+    loadDeviceFailed: 'Failed to load device information',
+    noTargetDevice: 'No target device, cannot send message',
   },
 
   upload: {

@@ -47,6 +47,14 @@
               <div v-if="message.isLoading" class="loading-indicator">
                 <a-spin size="small" />
               </div>
+              <!-- 已读/未读状态（设备模式） -->
+              <div v-if="showReadStatus" class="message-read-status">
+                <a-tag v-if="message.read !== false" color="default" size="small">已读</a-tag>
+                <template v-else>
+                  <a-tag color="orange" size="small">未读</a-tag>
+                  <a-button type="link" size="small" class="mark-read-btn" @click.stop="$emit('mark-read', message)">标记已读</a-button>
+                </template>
+              </div>
             </div>
           </div>
         </div>
@@ -181,6 +189,11 @@ export default {
     },
     // 消息是否可点击
     messageClickable: {
+      type: Boolean,
+      default: false
+    },
+    // 是否显示已读/未读状态及“标记已读”（设备对话模式）
+    showReadStatus: {
       type: Boolean,
       default: false
     },
@@ -640,6 +653,19 @@ export default {
 
 .loading-indicator :deep(.ant-spin-dot) {
   color: #95ec69;
+}
+
+.message-read-status {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark-read-btn {
+  padding: 0 4px;
+  font-size: 12px;
+  height: auto;
 }
 
 .chat-input-area {

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.DeviceMessageMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysDeviceMessage">
+        <id property="id" column="id" />
+        <result property="userId" column="userId" />
+        <result property="deviceId" column="deviceId" />
+        <result property="content" column="content" />
+        <result property="type" column="type" />
+        <result property="isUser" column="isUser" />
+        <result property="readStatus" column="read_status" />
+        <result property="createTime" column="createTime" />
+    </resultMap>
+
+    <insert id="insert" parameterType="com.xiaozhi.entity.SysDeviceMessage" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO device_message (userId, deviceId, content, type, isUser, read_status, createTime)
+        VALUES (#{userId}, #{deviceId}, #{content}, #{type}, #{isUser}, #{readStatus}, NOW())
+    </insert>
+
+    <select id="selectByUserIdAndDeviceId" resultMap="BaseResultMap">
+        SELECT id, userId, deviceId, content, type, isUser, read_status AS readStatus, createTime
+        FROM device_message
+        WHERE userId = #{userId} AND deviceId = #{deviceId}
+        ORDER BY createTime ASC
+    </select>
+
+    <update id="updateReadStatus">
+        UPDATE device_message
+        SET read_status = #{readStatus}
+        WHERE id = #{id} AND userId = #{userId}
+    </update>
+
+    <update id="updateAllToReadExcept">
+        UPDATE device_message
+        SET read_status = 1
+        WHERE userId = #{userId} AND deviceId = #{deviceId}
+        <if test="excludeId != null">
+            AND id != #{excludeId}
+        </if>
+    </update>
+</mapper>

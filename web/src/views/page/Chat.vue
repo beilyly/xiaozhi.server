@@ -81,9 +81,11 @@
     <!-- 使用ChatComponent替换原来的聊天内容和输入区域 -->
     <ChatComponent
       ref="chatComponentRef"
-      :message-list="messages"
+      :message-list="displayMessages"
       :show-input="true"
       :show-voice-toggle="chatMode === 'ai'"
+      :show-read-status="chatMode === 'device' && !!targetDevice"
+      :message-clickable="chatMode === 'device' && !!targetDevice"
       :user-avatar="userAvatar"
       :ai-avatar="aiAvatar"
       :input-placeholder="getInputPlaceholder()"
@@ -94,6 +96,7 @@
       @recording-error="handleRecordingError"
       @mode-change="handleModeChange"
       @send-message="handleSendMessage"
+      @mark-read="handleMarkRead"
     />
 
     <!-- 连接提示 -->
@@ -263,7 +266,11 @@ export default {
       // 目标设备信息
       targetDevice: null,
       // 聊天模式：'ai' - AI助手模式, 'device' - 设备通信模式
-      chatMode: 'ai'
+      chatMode: 'ai',
+      // 设备模式下的消息列表（含已读状态，持久化到 localStorage）
+      deviceMessages: [],
+      // 本次会话是否已因“全部已读”发送过 standby，避免重复发送
+      deviceStandbySentForSession: false
     };
   },
   computed: {
@@ -318,6 +325,14 @@ export default {
     // 是否显示设备信息
     showDeviceInfo() {
       return this.chatMode === 'device' && this.targetDevice;
+    },
+
+    // 当前展示的消息列表：设备模式用 deviceMessages，否则用 WebSocket messages
+    displayMessages() {
+      if (this.chatMode === 'device' && this.targetDevice) {
+        return this.deviceMessages;
+      }
+      return this.messages;
     }
   },
   watch: {
@@ -357,6 +372,19 @@ export default {
           this.initTempServerConfig();
         }
       }
+    },
+
+    // 设备模式且目标设备变化时加载该设备的历史消息
+    targetDevice: {
+      handler(device) {
+        if (device && device.deviceId) {
+          this.loadDeviceHistory();
+          this.deviceStandbySentForSession = false;
+        } else {
+          this.deviceMessages = [];
+        }
+      },
+      immediate: false
     }
   },
   mounted() {
@@ -422,7 +450,8 @@ export default {
           
           // 切换到设备通信模式
           this.chatMode = 'device';
-          
+          this.loadDeviceHistory();
+          this.deviceStandbySentForSession = false;
           this.$message.success(`已切换到设备 ${this.targetDevice.deviceName} 的对话模式`);
         }
       } catch (error) {
@@ -585,7 +614,13 @@ export default {
 
     // 清空消息
     handleClearMessages() {
-      clearMessages();
+      if (this.chatMode === 'device' && this.targetDevice) {
+        this.deviceMessages = [];
+        this.saveDeviceMessages();
+        this.deviceStandbySentForSession = false;
+      } else {
+        clearMessages();
+      }
       this.$message.success('已清空对话记录');
     },
 
@@ -715,8 +750,18 @@ export default {
         
         if (response.code === 200) {
           this.$message.success('消息发送成功');
-          // 添加用户消息到聊天记录
-          this.addUserMessage(message.content);
+          const newMsg = {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            content: message.content,
+            type: 'text',
+            isUser: true,
+            timestamp: new Date(),
+            isLoading: false,
+            read: false
+          };
+          this.deviceMessages.push(newMsg);
+          this.saveDeviceMessages();
+          this.checkAllReadAndSendStandby();
         } else {
           this.$message.error(response.message || '消息发送失败');
         }
@@ -740,6 +785,97 @@ export default {
       };
       
       this.messages.push(userMessage);
+    },
+
+    getDeviceStorageKey() {
+      if (!this.targetDevice || !this.targetDevice.deviceId) return null;
+      const userInfo = this.$store.getters.USER_INFO;
+      const userId = (userInfo && (userInfo.userId || userInfo.id)) || 'anonymous';
+      return `device_chat_${userId}_${this.targetDevice.deviceId}`;
+    },
+
+    loadDeviceHistory() {
+      const key = this.getDeviceStorageKey();
+      if (!key) return;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const { messages: list = [] } = JSON.parse(raw);
+          this.deviceMessages = (list || []).map(m => ({
+            ...m,
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+            read: m.read === undefined ? true : m.read
+          }));
+        } else {
+          this.deviceMessages = [];
+        }
+        const deviceId = this.targetDevice?.deviceId;
+        if (deviceId) {
+          axios.get({ url: api.deviceMessage.query, data: { deviceId } })
+            .then(res => {
+              if (res.code === 200 && res.data && Array.isArray(res.data.messages) && res.data.messages.length > 0) {
+                const fromApi = res.data.messages.map(m => ({
+                  id: m.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                  content: m.content || '',
+                  type: m.type || 'text',
+                  isUser: !!m.isUser,
+                  timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                  read: !!m.read
+                }));
+                this.deviceMessages = fromApi;
+                this.saveDeviceMessages();
+              }
+            })
+            .catch(() => {});
+        }
+      } catch (e) {
+        this.deviceMessages = [];
+      }
+    },
+
+    saveDeviceMessages() {
+      const key = this.getDeviceStorageKey();
+      if (!key) return;
+      try {
+        const list = this.deviceMessages.map(m => ({
+          ...m,
+          timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp
+        }));
+        localStorage.setItem(key, JSON.stringify({ messages: list, updatedAt: new Date().toISOString() }));
+      } catch (e) {}
+    },
+
+    handleMarkRead(message) {
+      if (this.chatMode !== 'device' || !this.targetDevice) return;
+      const idx = this.deviceMessages.findIndex(m => m.id === message.id);
+      if (idx === -1) return;
+      this.$set(this.deviceMessages[idx], 'read', true);
+      this.saveDeviceMessages();
+      this.checkAllReadAndSendStandby();
+    },
+
+    checkAllReadAndSendStandby() {
+      if (this.chatMode !== 'device' || !this.targetDevice || this.deviceStandbySentForSession) return;
+      if (this.deviceMessages.length === 0) return;
+      const allRead = this.deviceMessages.every(m => m.read);
+      if (!allRead) return;
+      this.sendStandbyCommand();
+    },
+
+    async sendStandbyCommand() {
+      if (!this.targetDevice || this.deviceStandbySentForSession) return;
+      try {
+        const response = await axios.jsonPost({
+          url: api.deviceMessage.standby,
+          data: { deviceId: this.targetDevice.deviceId }
+        });
+        if (response.code === 200) {
+          this.deviceStandbySentForSession = true;
+          this.$message.success('已发送待命指令，设备将切换至待命界面');
+        }
+      } catch (e) {
+        this.$message.error('发送待命指令失败');
+      }
     },
   }
 };

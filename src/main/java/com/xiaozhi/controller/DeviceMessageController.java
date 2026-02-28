@@ -3,7 +3,9 @@ package com.xiaozhi.controller;
 import com.xiaozhi.common.web.AjaxResult;
 import com.xiaozhi.communication.common.SessionManager;
 import com.xiaozhi.communication.service.DeviceMessageQueueService;
+import com.xiaozhi.dao.DeviceMessageMapper;
 import com.xiaozhi.entity.SysDevice;
+import com.xiaozhi.entity.SysDeviceMessage;
 import com.xiaozhi.service.SysDeviceService;
 import com.xiaozhi.utils.CmsUtils;
 import jakarta.annotation.Resource;
@@ -11,7 +13,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 设备消息管理控制器
@@ -30,6 +34,9 @@ public class DeviceMessageController extends BaseController {
 
     @Resource
     private DeviceMessageQueueService deviceMessageQueueService;
+
+    @Resource
+    private DeviceMessageMapper deviceMessageMapper;
 
     /**
      * 发送消息到指定设备
@@ -69,6 +76,7 @@ public class DeviceMessageController extends BaseController {
                     device.setState("1");
                     deviceService.update(device);
 
+                    saveDeviceMessageToDb(request, true);
                     Map<String, Object> result = new HashMap<>();
                     result.put("messageId", "msg_" + System.currentTimeMillis());
                     result.put("deviceId", request.getDeviceId());
@@ -80,11 +88,9 @@ public class DeviceMessageController extends BaseController {
 
                 } catch (Exception e) {
                     logger.error("通过WebSocket发送消息失败，将消息加入等待队列", e);
-                    // WebSocket发送失败，将消息加入等待队列
                     return handleOfflineDevice(request);
                 }
             } else {
-                // 设备离线，将消息加入等待队列
                 return handleOfflineDevice(request);
             }
 
@@ -110,13 +116,12 @@ public class DeviceMessageController extends BaseController {
             );
 
             if (added) {
-                // 更新设备状态为离线
                 SysDevice device = deviceService.selectDeviceById(request.getDeviceId());
                 if (device != null) {
                     device.setState("0");
                     deviceService.update(device);
                 }
-
+                saveDeviceMessageToDb(request, true);
                 Map<String, Object> result = new HashMap<>();
                 result.put("messageId", "msg_" + System.currentTimeMillis());
                 result.put("deviceId", request.getDeviceId());
@@ -136,34 +141,117 @@ public class DeviceMessageController extends BaseController {
     }
 
     /**
-     * 查询设备消息历史
+     * 查询当前用户与指定设备的对话历史（按用户隔离，只返回该用户与该设备的记录）
      *
      * @param deviceId 设备ID
-     * @return 消息历史
+     * @return 当前用户与该设备的消息历史
      */
     @GetMapping("/query")
     @ResponseBody
     public AjaxResult queryMessages(@RequestParam String deviceId) {
         try {
-            // 验证设备是否存在
             SysDevice device = deviceService.selectDeviceById(deviceId);
             if (device == null) {
                 return AjaxResult.error("设备不存在");
             }
-
-            // 这里可以添加查询消息历史的逻辑
-            // 例如：从数据库查询该设备的消息记录
-
+            Integer userId = CmsUtils.getUserId();
+            if (userId == null) {
+                Map<String, Object> empty = new HashMap<>();
+                empty.put("deviceId", deviceId);
+                empty.put("messages", new Object[0]);
+                empty.put("total", 0);
+                return AjaxResult.success(empty);
+            }
+            List<SysDeviceMessage> list = deviceMessageMapper.selectByUserIdAndDeviceId(userId, deviceId);
+            List<Map<String, Object>> messages = list.stream().map(m -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", "msg_" + m.getId());
+                map.put("content", m.getContent());
+                map.put("type", m.getType() != null ? m.getType() : "text");
+                map.put("isUser", Boolean.TRUE.equals(m.getIsUser()));
+                map.put("timestamp", m.getCreateTime());
+                map.put("read", m.getReadStatus() != null && m.getReadStatus() == 1);
+                return map;
+            }).collect(Collectors.toList());
             Map<String, Object> result = new HashMap<>();
             result.put("deviceId", deviceId);
-            result.put("messages", new Object[0]); // 暂时返回空数组
-            result.put("total", 0);
-
+            result.put("messages", messages);
+            result.put("total", messages.size());
             return AjaxResult.success(result);
-
         } catch (Exception e) {
             logger.error("查询设备消息历史失败", e);
             return AjaxResult.error("查询消息历史失败");
+        }
+    }
+
+    /**
+     * 标记一条设备消息为已读（按当前用户校验）
+     * 请求体：{ "deviceId": "xxx", "messageId": "msg_123" }，messageId 为 query 返回的 id
+     */
+    @PostMapping("/read")
+    @ResponseBody
+    public AjaxResult markMessageRead(@RequestBody MarkReadRequest request) {
+        try {
+            SysDevice device = deviceService.selectDeviceById(request.getDeviceId());
+            if (device == null) {
+                return AjaxResult.error("设备不存在");
+            }
+            Integer userId = CmsUtils.getUserId();
+            if (userId == null) {
+                return AjaxResult.error("请先登录");
+            }
+            Long id = parseMessageId(request.getMessageId());
+            if (id == null) {
+                return AjaxResult.success("无需更新");
+            }
+            int updated = deviceMessageMapper.updateReadStatus(id, userId, 1);
+            if (updated > 0) {
+                logger.debug("消息已标为已读 - id: {}, userId: {}", id, userId);
+            }
+            return AjaxResult.success("已标为已读");
+        } catch (Exception e) {
+            logger.error("标记消息已读失败", e);
+            return AjaxResult.error("标记已读失败");
+        }
+    }
+
+    /** 解析前端 messageId，如 "msg_123" -> 123 */
+    private static Long parseMessageId(String messageId) {
+        if (messageId == null || messageId.isEmpty()) return null;
+        if (messageId.startsWith("msg_")) {
+            try {
+                return Long.parseLong(messageId.substring(4));
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        try {
+            return Long.parseLong(messageId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 将发送到设备的消息写入数据库（按当前用户+设备保留历史）
+     */
+    private void saveDeviceMessageToDb(DeviceMessageRequest request, boolean isUser) {
+        try {
+            Integer userId = CmsUtils.getUserId();
+            if (userId == null) return;
+            SysDeviceMessage msg = new SysDeviceMessage()
+                .setUserId(userId)
+                .setDeviceId(request.getDeviceId())
+                .setContent(request.getContent() != null ? request.getContent() : "")
+                .setType(request.getType() != null ? request.getType() : "text")
+                .setIsUser(isUser)
+                .setReadStatus(0);
+            deviceMessageMapper.insert(msg);
+            if (msg.getId() != null) {
+                deviceMessageMapper.updateAllToReadExcept(userId, request.getDeviceId(), msg.getId());
+            }
+        } catch (Exception e) {
+            logger.warn("保存设备留言记录失败: {}", e.getMessage());
         }
     }
 
@@ -230,6 +318,39 @@ public class DeviceMessageController extends BaseController {
         } catch (Exception e) {
             logger.error("清空设备等待队列失败", e);
             return AjaxResult.error("清空等待队列失败");
+        }
+    }
+
+    /**
+     * 向设备发送待命指令（仅此一种指令，避免任意 command 的权限风险）
+     * 固定下发：{"type":"system","command":"standby"}
+     *
+     * @param request 仅需 deviceId
+     * @return 发送结果
+     */
+    @PostMapping("/standby")
+    @ResponseBody
+    public AjaxResult sendStandby(@RequestBody DeviceStandbyRequest request) {
+        try {
+            SysDevice device = deviceService.selectDeviceById(request.getDeviceId());
+            if (device == null) {
+                return AjaxResult.error("设备不存在");
+            }
+            var chatSession = sessionManager.getSessionByDeviceId(request.getDeviceId());
+            if (chatSession == null || !chatSession.isOpen()) {
+                return AjaxResult.error("设备不在线，无法发送指令");
+            }
+            String messageJson = "{\"type\":\"system\",\"command\":\"standby\"}";
+            chatSession.sendTextMessage(messageJson);
+            Map<String, Object> result = new HashMap<>();
+            result.put("deviceId", request.getDeviceId());
+            result.put("status", "sent");
+            result.put("timestamp", LocalDateTime.now());
+            logger.info("已向设备发送待命指令 - DeviceId: {}", request.getDeviceId());
+            return AjaxResult.success("待命指令已发送", result);
+        } catch (Exception e) {
+            logger.error("发送待命指令失败", e);
+            return AjaxResult.error("发送指令失败");
         }
     }
 
@@ -348,6 +469,29 @@ public class DeviceMessageController extends BaseController {
         public void setTimestamp(String timestamp) {
             this.timestamp = timestamp;
         }
+    }
+
+    /**
+     * 待命指令请求实体（仅 deviceId，无其它参数）
+     */
+    public static class DeviceStandbyRequest {
+        private String deviceId;
+
+        public String getDeviceId() { return deviceId; }
+        public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+    }
+
+    /**
+     * 标记已读请求实体
+     */
+    public static class MarkReadRequest {
+        private String deviceId;
+        private String messageId;
+
+        public String getDeviceId() { return deviceId; }
+        public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+        public String getMessageId() { return messageId; }
+        public void setMessageId(String messageId) { this.messageId = messageId; }
     }
 
     /**
