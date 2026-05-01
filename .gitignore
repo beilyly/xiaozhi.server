@@ -37,3 +37,6 @@ application-local.properties
 datasets/
 .cursorrules
 .cursor/
+
+# Docker 本地覆盖配置
+docker-compose.override.yml
