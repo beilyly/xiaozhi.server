@@ -138,7 +138,10 @@ public class CmsUtils {
             String effectiveUploadPath = getEffectiveUploadPath();
             File firmwareDir = new File(effectiveUploadPath + File.separator + "firmware");
             if (firmwareDir.exists()) {
-                File latestFile = findLatestFirmwareFile(firmwareDir);
+                File latestFile = findLatestVersionedFirmwareFile(firmwareDir);
+                if (latestFile == null) {
+                    latestFile = findLatestFirmwareFile(firmwareDir);
+                }
                 if (latestFile != null) {
                     Optional<String> version = FirmwareUtils.extractVersion(latestFile.getName());
                     if (version.isPresent()) {
@@ -203,8 +206,11 @@ public class CmsUtils {
                 return defaultFirewareDownloadUrl; // 如果没有固件文件，返回默认OTA地址
             }
 
-            // 查找最新的.bin文件
-            File latestFile = findLatestFirmwareFile(dir);
+            // 查找最新的.bin文件，优先与版本号可解析的固件保持一致
+            File latestFile = findLatestVersionedFirmwareFile(dir);
+            if (latestFile == null) {
+                latestFile = findLatestFirmwareFile(dir);
+            }
             if (latestFile != null) {
                 String fileName = latestFile.getName();
                 String serverAddress = getServerAddress();
@@ -238,6 +244,36 @@ public class CmsUtils {
                     latestTime = subLatest.lastModified();
                 }
             } else if (file.getName().endsWith(".bin") && file.lastModified() > latestTime) {
+                latestFile = file;
+                latestTime = file.lastModified();
+            }
+        }
+
+        return latestFile;
+    }
+
+    /**
+     * 递归查找最新且能从文件名解析出版本号的固件文件
+     */
+    private File findLatestVersionedFirmwareFile(File dir) {
+        File latestFile = null;
+        long latestTime = 0;
+
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return null;
+        }
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                File subLatest = findLatestVersionedFirmwareFile(file);
+                if (subLatest != null && subLatest.lastModified() > latestTime) {
+                    latestFile = subLatest;
+                    latestTime = subLatest.lastModified();
+                }
+            } else if (file.getName().endsWith(".bin")
+                    && file.lastModified() > latestTime
+                    && FirmwareUtils.extractVersion(file.getName()).isPresent()) {
                 latestFile = file;
                 latestTime = file.lastModified();
             }

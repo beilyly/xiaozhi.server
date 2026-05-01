@@ -1,0 +1,28 @@
+volumes:
+  mysql_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /Users/mac/OrbStack/docker/volumes/xiaozhi-esp32-server-java-main_mysql_data
+
+  maven_repo:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.docker-data/maven
+
+  vosk_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.docker-data/vosk
+
+  app_files:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.docker-data/appfile
