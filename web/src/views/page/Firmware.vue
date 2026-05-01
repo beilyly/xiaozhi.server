@@ -1,840 +1,698 @@
 <template>
-  <div class="firmware-management">
-    <div class="page-header">
-      <h2>固件管理</h2>
-      <p>管理设备固件文件，支持上传、下载和删除操作</p>
+  <section class="firmware-page">
+    <header class="page-heading">
+      <div>
+        <span class="eyebrow">Firmware OTA</span>
+        <h1>固件上传管理</h1>
+        <p>版本号随固件文件绑定，上传后设备 OTA 会优先读取最新固件文件名中的版本。</p>
+      </div>
+      <a-button :loading="loading" @click="loadFiles">
+        <template #icon><ReloadOutlined /></template>
+        刷新
+      </a-button>
+    </header>
+
+    <div class="summary-grid">
+      <div class="metric-panel metric-primary">
+        <span>当前版本</span>
+        <strong>{{ latestFile?.version || '未绑定' }}</strong>
+        <small>{{ latestFile?.fileName || '暂无固件' }}</small>
+      </div>
+      <div class="metric-panel">
+        <span>固件数量</span>
+        <strong>{{ firmwareFiles.length }}</strong>
+        <small>服务端文件记录</small>
+      </div>
+      <div class="metric-panel">
+        <span>占用空间</span>
+        <strong>{{ formatFileSize(totalSize) }}</strong>
+        <small>全部固件合计</small>
+      </div>
     </div>
 
-    <!-- 上传区域 -->
-    <div class="upload-section">
-      <el-card class="upload-card">
-        <div slot="header" class="card-header">
-          <span>上传固件</span>
-        </div>
-        <el-form :model="uploadForm" :rules="uploadRules" ref="uploadForm" label-width="100px">
-          <el-form-item label="固件文件" prop="file">
-            <!-- 原生文件选择器作为备选方案 -->
-            <div class="file-upload-container" 
-                 @dragover.prevent
-                 @dragenter.prevent
-                 @drop.prevent="handleDrop">
-              <input 
-                ref="fileInput"
-                type="file" 
-                accept=".bin"
-                @change="handleNativeFileChange"
-                style="display: none;">
-              
-              <el-upload
-                ref="upload"
-                :auto-upload="false"
-                :on-change="handleFileChange"
-                :before-upload="beforeUpload"
-                :on-remove="handleFileRemove"
-                :file-list="uploadFileList"
-                accept=".bin"
-                drag
-                :multiple="false"
-                :limit="1"
-                :on-exceed="handleExceed"
-                action="#"
-                :show-file-list="true"
-                :disabled="uploading">
-                <i class="el-icon-upload"></i>
-                <div class="el-upload__text">将固件文件拖到此处，或<em>点击上传</em></div>
-                <div class="el-upload__tip" slot="tip">只能上传.bin格式的固件文件</div>
-              </el-upload>
-              
-              <!-- 备选按钮 -->
-              <div class="upload-fallback" v-if="!uploadFileList.length">
-                <el-button type="primary" @click="triggerFileSelect" :disabled="uploading">
-                  <i class="el-icon-upload"></i> 选择固件文件
-                </el-button>
-                <p class="upload-tip">或者拖拽文件到上方区域</p>
-              </div>
-            </div>
-          </el-form-item>
-          <el-form-item label="版本号" prop="version">
-            <el-input v-model="uploadForm.version" placeholder="请输入固件版本号，如：1.0.0"></el-input>
-          </el-form-item>
-          <el-form-item label="描述">
-            <el-input
-              v-model="uploadForm.description"
-              type="textarea"
-              :rows="3"
-              placeholder="请输入固件描述信息">
-            </el-input>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="submitUpload" :loading="uploading">
-              <i class="el-icon-upload"></i> 上传固件
-            </el-button>
-            <el-button type="default" @click="resetUpload" :disabled="uploading">
-              <i class="el-icon-refresh-left"></i> 重置
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </el-card>
-    </div>
-
-    <!-- 文件列表 -->
-    <div class="file-list-section">
-      <el-card>
-        <div slot="header" class="card-header">
-          <span>固件文件列表 ({{ fileList.length }} 个文件)</span>
-          <el-button type="primary" size="small" @click="refreshFileList" :loading="loading">
-            <i class="el-icon-refresh"></i> 刷新
-          </el-button>
-        </div>
-        
-        <!-- 简化的表格，用于测试 -->
-        <div v-if="fileList.length > 0">
-          <h4>文件列表 (简化显示):</h4>
-          <div v-for="(file, index) in fileList" :key="index" style="padding: 10px; border: 1px solid #ddd; margin: 5px 0;">
-            <p><strong>文件名:</strong> {{ file.fileName }}</p>
-            <p><strong>大小:</strong> {{ formatFileSize(file.size) }}</p>
-            <p><strong>时间:</strong> {{ formatDate(file.modifyTime) }}</p>
-            <p><strong>下载链接:</strong> {{ file.downloadUrl }}</p>
-            <el-button type="primary" size="mini" @click="downloadFile(file)">
-              <i class="el-icon-download"></i> 下载
-            </el-button>
-            <el-button type="danger" size="mini" @click="deleteFile(file)">
-              <i class="el-icon-delete"></i> 删除
-            </el-button>
+    <div class="workspace-grid">
+      <section class="panel upload-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>上传新固件</h2>
+            <p>推荐文件名：firmware_v2.3.0.bin</p>
           </div>
+          <FileProtectOutlined class="panel-icon" />
         </div>
-        
-        <el-table
-          :data="fileList"
-          :key="tableKey"
-          v-loading="loading"
-          stripe
-          style="width: 100%"
-          :empty-text="loading ? '加载中...' : '暂无数据'">
-          <el-table-column prop="fileName" label="文件名" min-width="200">
-            <template #default="scope">
-              <i class="el-icon-document"></i>
-              <span style="margin-left: 8px">{{ scope?.row?.fileName }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="size" label="文件大小" width="120">
-            <template #default="scope">
-              {{ formatFileSize(scope?.row?.size) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="modifyTime" label="上传时间" width="180">
-            <template #default="scope">
-              {{ formatDate(scope?.row?.modifyTime) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="200">
-            <template #default="scope">
-              <el-button
-                type="primary"
-                size="mini"
-                @click="scope?.row && downloadFile(scope.row)">
-                <i class="el-icon-download"></i> 下载
-              </el-button>
-              <el-button
-                type="danger"
-                size="mini"
-                @click="scope?.row && deleteFile(scope.row)"
-                :loading="scope?.row?.deleting">
-                <i class="el-icon-delete"></i> 删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
 
-        <div v-if="fileList.length === 0 && !loading" class="empty-state">
-          <i class="el-icon-document"></i>
-          <p>暂无固件文件</p>
+        <a-upload-dragger
+          class="firmware-uploader"
+          accept=".bin"
+          :before-upload="beforeUpload"
+          :disabled="uploading"
+          :max-count="1"
+          :multiple="false"
+          :show-upload-list="false"
+        >
+          <p class="ant-upload-drag-icon"><InboxOutlined /></p>
+          <p class="ant-upload-text">拖拽或点击选择 .bin 固件</p>
+          <p class="ant-upload-hint">选择后会自动识别文件名中的 v版本号</p>
+        </a-upload-dragger>
+
+        <div v-if="selectedFile" class="selected-file">
+          <div class="selected-main">
+            <CheckCircleOutlined />
+            <div>
+              <strong>{{ selectedFile.name }}</strong>
+              <span>{{ formatFileSize(selectedFile.size) }}</span>
+            </div>
+          </div>
+          <a-button type="text" :disabled="uploading" @click="clearSelectedFile">
+            移除
+          </a-button>
         </div>
-        
-        <!-- 调试信息 -->
-        <div v-if="fileList.length > 0" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;">
-          <p><strong>调试信息:</strong></p>
-          <p>文件数量: {{ fileList.length }}</p>
-          <p>第一个文件: {{ fileList[0] ? fileList[0].fileName : '无' }}</p>
-          <p>表格Key: {{ tableKey }}</p>
+
+        <a-form layout="vertical" class="version-form">
+          <a-form-item
+            label="绑定版本号"
+            :validate-status="versionValidateStatus"
+            :help="versionHelp"
+          >
+            <a-input
+              v-model:value="version"
+              size="large"
+              placeholder="例如 2.3.0 或 v2.3.0"
+              :disabled="uploading"
+              @change="versionTouched = true"
+              @press-enter="handleUpload"
+            />
+          </a-form-item>
+        </a-form>
+
+        <a-alert
+          v-if="versionConflict"
+          type="warning"
+          show-icon
+          :message="'版本 ' + normalizedVersion + ' 已存在'"
+          :description="'现有文件：' + versionConflict.fileName"
+        />
+
+        <a-progress
+          v-if="uploading"
+          :percent="uploadProgress"
+          :show-info="true"
+          status="active"
+        />
+
+        <div class="upload-actions">
+          <a-button :disabled="uploading" @click="resetUpload">重置</a-button>
+          <a-button type="primary" :loading="uploading" :disabled="uploadDisabled" @click="handleUpload">
+            <template #icon><CloudUploadOutlined /></template>
+            上传并绑定
+          </a-button>
         </div>
-      </el-card>
+      </section>
+
+      <section class="panel list-panel">
+        <div class="panel-heading table-heading">
+          <div>
+            <h2>固件列表</h2>
+            <p>最新上传的版本会作为 OTA 当前版本。</p>
+          </div>
+          <a-tag v-if="latestFile?.version" color="green">当前 {{ latestFile.version }}</a-tag>
+        </div>
+
+        <a-table
+          :columns="columns"
+          :data-source="firmwareFiles"
+          :loading="loading"
+          :pagination="{ pageSize: 8, showSizeChanger: false }"
+          :row-key="rowKey"
+          :row-class-name="rowClassName"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'fileName'">
+              <div class="file-cell">
+                <FileProtectOutlined />
+                <div>
+                  <div class="file-title">
+                    <span>{{ record.fileName }}</span>
+                    <a-tag v-if="isLatest(record)" color="green">当前</a-tag>
+                  </div>
+                  <small v-if="record.hash">#{{ record.hash }}</small>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="column.key === 'version'">
+              <a-tag :color="record.version ? 'blue' : 'default'">
+                {{ record.version || '未绑定' }}
+              </a-tag>
+            </template>
+
+            <template v-else-if="column.key === 'size'">
+              {{ formatFileSize(record.size) }}
+            </template>
+
+            <template v-else-if="column.key === 'modifyTime'">
+              {{ formatDate(record.modifyTime) }}
+            </template>
+
+            <template v-else-if="column.key === 'action'">
+              <a-space>
+                <a-tooltip title="下载">
+                  <a-button type="text" @click="downloadFile(record)">
+                    <template #icon><DownloadOutlined /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip title="复制链接">
+                  <a-button type="text" @click="copyDownloadUrl(record)">
+                    <template #icon><LinkOutlined /></template>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip title="删除">
+                  <a-button
+                    danger
+                    type="text"
+                    :loading="deletingFileName === record.fileName"
+                    @click="confirmDelete(record)"
+                  >
+                    <template #icon><DeleteOutlined /></template>
+                  </a-button>
+                </a-tooltip>
+              </a-space>
+            </template>
+          </template>
+
+          <template #emptyText>
+            <div class="empty-state">
+              <CloudUploadOutlined />
+              <span>暂无固件文件</span>
+            </div>
+          </template>
+        </a-table>
+      </section>
     </div>
-  </div>
+  </section>
 </template>
 
-<script>
-import axios from '@/services/axios'
-import api from '@/services/api'
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { message, Modal, type UploadProps } from 'ant-design-vue'
+import {
+  CheckCircleOutlined,
+  CloudUploadOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  FileProtectOutlined,
+  InboxOutlined,
+  LinkOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons-vue'
+import {
+  deleteFirmwareFile,
+  listFirmwareFiles,
+  uploadFirmwareFile,
+  type FirmwareFile,
+} from '@/services/firmware'
 
-export default {
-  name: 'Firmware',
-  data() {
-    return {
-      loading: false,
-      uploading: false,
-      fileList: [],
-      uploadFileList: [],
-      tableKey: 0,
-      uploadForm: {
-        file: null,
-        version: '',
-        description: ''
-      },
-      uploadRules: {
-        file: [
-          { required: true, message: '请选择固件文件', trigger: 'change' }
-        ]
-      }
+const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.-]{0,31}$/
+const MAX_FILE_SIZE = 2048 * 1024 * 1024
+
+const loading = ref(false)
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const firmwareFiles = ref<FirmwareFile[]>([])
+const selectedFile = ref<File | null>(null)
+const detectedVersion = ref('')
+const version = ref('')
+const versionTouched = ref(false)
+const deletingFileName = ref('')
+
+const columns = [
+  { title: '文件名', dataIndex: 'fileName', key: 'fileName', minWidth: 280 },
+  { title: '版本', dataIndex: 'version', key: 'version', width: 120 },
+  { title: '大小', dataIndex: 'size', key: 'size', width: 110 },
+  { title: '上传时间', dataIndex: 'modifyTime', key: 'modifyTime', width: 190 },
+  { title: '操作', key: 'action', width: 140, align: 'center' },
+]
+
+const latestFile = computed(() => firmwareFiles.value[0])
+const totalSize = computed(() => firmwareFiles.value.reduce((sum, file) => sum + (file.size || 0), 0))
+const normalizedVersion = computed(() => normalizeVersion(version.value))
+const versionConflict = computed(() => {
+  if (!normalizedVersion.value) return null
+  return firmwareFiles.value.find(
+    (file) => file.version && file.version.toLowerCase() === normalizedVersion.value.toLowerCase(),
+  )
+})
+const versionInvalid = computed(() => normalizedVersion.value !== '' && !VERSION_PATTERN.test(normalizedVersion.value))
+const uploadDisabled = computed(() => {
+  return !selectedFile.value || !normalizedVersion.value || versionInvalid.value || !!versionConflict.value
+})
+const versionValidateStatus = computed(() => {
+  if (versionInvalid.value || versionConflict.value) return 'warning'
+  if (normalizedVersion.value) return 'success'
+  return ''
+})
+const versionHelp = computed(() => {
+  if (versionInvalid.value) return '版本号只能包含字母、数字、点和连字符，长度不超过32位'
+  if (versionConflict.value) return '同一版本只能保留一个固件文件，避免 OTA 版本歧义'
+  if (detectedVersion.value) return '已从文件名识别版本：' + detectedVersion.value
+  return '文件名没有版本时，可在这里手动填写'
+})
+
+onMounted(() => {
+  loadFiles()
+})
+
+async function loadFiles() {
+  loading.value = true
+  try {
+    const res = await listFirmwareFiles()
+    if (res.code === 200) {
+      firmwareFiles.value = res.files || []
+    } else {
+      message.error(res.message || '获取固件列表失败')
     }
-  },
-  mounted() {
-    this.loadFileList()
-    // 测试上传组件是否正常初始化
-    this.$nextTick(() => {
-      console.log('上传组件引用:', this.$refs.upload)
-      if (this.$refs.upload) {
-        console.log('上传组件已正确初始化')
-      } else {
-        console.error('上传组件初始化失败')
-      }
-    })
-  },
-  watch: {
-    fileList: {
-      handler(newVal) {
-        console.log('fileList 数据变化:', newVal)
-        console.log('fileList 类型:', typeof newVal)
-        console.log('fileList 长度:', newVal ? newVal.length : 'undefined')
-      },
-      deep: true
-    }
-  },
-  methods: {
-    // 加载文件列表
-    loadFileList() {
-      this.loading = true
-      axios
-        .get({
-          url: api.firmware.list
-        }).then(res => {
-          this.loading = false
-          console.log('文件列表响应:', res)
-          console.log('响应数据:', res.data)
-          console.log('响应代码:', res.code)
-          
-          // 检查响应格式，可能是res.data或res
-          const responseData = res.data || res;
-          const responseCode = responseData.code;
-          const responseFiles = responseData.files;
-          
-          if (responseCode === 200) {
-            // 直接赋值，不使用Vue.set
-            this.fileList = responseFiles || []
-            console.log('解析后的文件列表:', this.fileList)
-            console.log('文件列表长度:', this.fileList.length)
-            console.log('文件列表详情:', JSON.stringify(this.fileList, null, 2))
-            
-            // 更新表格key强制重新渲染
-            this.tableKey += 1
-            
-            // 强制更新视图
-            this.$forceUpdate()
-            
-            // 空文件列表是正常的，不需要显示错误
-            if (this.fileList.length === 0) {
-              console.log('文件列表为空，这是正常状态')
-            }
-          } else {
-            this.$message.error('获取文件列表失败: ' + (responseData.message || '未知错误'))
-          }
-        }).catch((error) => {
-          this.loading = false
-          console.error('获取文件列表失败:', error)
-          this.$message.error('获取文件列表失败')
-        })
-    },
-
-    // 刷新文件列表
-    refreshFileList() {
-      this.loadFileList()
-    },
-
-    // 文件选择变化
-    handleFileChange(file, fileList) {
-      console.log('=== 文件变化事件触发 ===')
-      console.log('文件对象:', file)
-      console.log('文件列表:', fileList)
-      console.log('文件状态:', file.status)
-      console.log('文件名称:', file.name)
-      console.log('文件大小:', file.size)
-      console.log('文件原始对象:', file.raw)
-      
-      // 更新文件列表
-      this.uploadFileList = fileList
-      
-      // 验证文件格式
-      if (file.name && !file.name.toLowerCase().endsWith('.bin')) {
-        this.$message.error('只能选择.bin格式的固件文件')
-        // 移除不符合格式的文件
-        this.uploadFileList = this.uploadFileList.filter(f => f.name.toLowerCase().endsWith('.bin'))
-        return false
-      }
-      
-      // 确保文件对象正确设置
-      if (file.raw) {
-        this.uploadForm.file = file.raw
-        console.log('文件已设置到uploadForm.file:', this.uploadForm.file)
-        this.$message.success('文件选择成功: ' + file.name)
-      } else if (file.origin) {
-        // 有些情况下文件对象可能使用origin属性
-        this.uploadForm.file = file.origin
-        console.log('文件已设置到uploadForm.file (origin):', this.uploadForm.file)
-        this.$message.success('文件选择成功: ' + file.name)
-      } else {
-        console.warn('文件对象中没有raw或origin属性')
-        console.log('尝试直接使用file对象:', file)
-        this.uploadForm.file = file
-        this.$message.success('文件选择成功: ' + file.name)
-      }
-    },
-
-    // 文件移除
-    handleFileRemove(file, fileList) {
-      console.log('文件移除:', file, fileList)
-      this.uploadForm.file = null
-      this.uploadFileList = fileList
-    },
-
-    // 文件超出限制处理
-    handleExceed(files, fileList) {
-      console.log('文件超出限制:', files, fileList)
-      this.$message.warning('只能选择一个固件文件')
-    },
-
-    // 上传成功处理
-    handleUploadSuccess(response, file, fileList) {
-      console.log('上传成功:', response, file, fileList)
-    },
-
-    // 上传失败处理
-    handleUploadError(error, file, fileList) {
-      console.log('上传失败:', error, file, fileList)
-      this.$message.error('文件上传失败')
-    },
-
-    // 文件数量超出限制
-    handleExceed(files, fileList) {
-      this.$message.warning(`最多只能选择1个文件，当前选择了${files.length}个文件，共${files.length + fileList.length}个文件`)
-    },
-
-    // 触发原生文件选择器
-    triggerFileSelect() {
-      console.log('触发原生文件选择器')
-      this.$refs.fileInput.click()
-    },
-
-    // 处理原生文件选择
-    handleNativeFileChange(event) {
-      console.log('=== 原生文件选择事件 ===')
-      const file = event.target.files[0]
-      console.log('选择的文件:', file)
-      
-      if (!file) {
-        console.log('没有选择文件')
-        return
-      }
-      
-      // 验证文件格式
-      if (!file.name.toLowerCase().endsWith('.bin')) {
-        this.$message.error('只能选择.bin格式的固件文件')
-        event.target.value = '' // 清空选择
-        return
-      }
-      
-      // 验证文件大小
-      const isLt50M = file.size / 1024 / 1024 < 50
-      if (!isLt50M) {
-        this.$message.error('固件文件大小不能超过 50MB!')
-        event.target.value = '' // 清空选择
-        return
-      }
-      
-      // 设置文件到表单
-      this.uploadForm.file = file
-      console.log('文件已设置到uploadForm.file:', this.uploadForm.file)
-      
-      // 更新文件列表显示
-      this.uploadFileList = [{
-        name: file.name,
-        size: file.size,
-        status: 'ready',
-        raw: file
-      }]
-      
-      this.$message.success('文件选择成功: ' + file.name)
-    },
-
-    // 处理拖拽文件
-    handleDrop(event) {
-      console.log('=== 拖拽文件事件 ===')
-      const files = event.dataTransfer.files
-      console.log('拖拽的文件:', files)
-      
-      if (files.length === 0) {
-        console.log('没有拖拽文件')
-        return
-      }
-      
-      const file = files[0]
-      console.log('选择的文件:', file)
-      
-      // 验证文件格式
-      if (!file.name.toLowerCase().endsWith('.bin')) {
-        this.$message.error('只能拖拽.bin格式的固件文件')
-        return
-      }
-      
-      // 验证文件大小
-      const isLt50M = file.size / 1024 / 1024 < 50
-      if (!isLt50M) {
-        this.$message.error('固件文件大小不能超过 50MB!')
-        return
-      }
-      
-      // 设置文件到表单
-      this.uploadForm.file = file
-      console.log('文件已设置到uploadForm.file:', this.uploadForm.file)
-      
-      // 更新文件列表显示
-      this.uploadFileList = [{
-        name: file.name,
-        size: file.size,
-        status: 'ready',
-        raw: file
-      }]
-      
-      this.$message.success('文件拖拽成功: ' + file.name)
-    },
-
-    // 上传前验证
-    beforeUpload(file) {
-      console.log('=== 上传前验证 ===')
-      console.log('验证文件:', file)
-      console.log('文件名称:', file.name)
-      console.log('文件大小:', file.size)
-      
-      const isBin = file.name.toLowerCase().endsWith('.bin')
-      if (!isBin) {
-        console.log('文件格式验证失败:', file.name)
-        this.$message.error('只能上传.bin格式的固件文件!')
-        return false
-      }
-      
-      const isLt50M = file.size / 1024 / 1024 < 50
-      if (!isLt50M) {
-        console.log('文件大小验证失败:', file.size)
-        this.$message.error('固件文件大小不能超过 50MB!')
-        return false
-      }
-      
-      console.log('文件验证通过')
-      return true
-    },
-
-    // 提交上传
-    submitUpload() {
-      // 手动验证文件是否选择
-      if (!this.uploadForm.file) {
-        this.$message.error('请选择固件文件')
-        return
-      }
-
-      // 验证表单（安全方式）
-      if (this.$refs.uploadForm && this.$refs.uploadForm.validate) {
-        this.$refs.uploadForm.validate((valid) => {
-          if (!valid) return
-          this.performUpload()
-        })
-      } else {
-        // 如果表单验证不可用，直接执行上传
-        this.performUpload()
-      }
-    },
-
-    // 执行上传操作
-    performUpload() {
-      this.uploading = true
-      const formData = new FormData()
-      formData.append('file', this.uploadForm.file)
-      formData.append('version', this.uploadForm.version)
-      formData.append('description', this.uploadForm.description)
-
-      // 使用专门的文件上传方法
-      axios.upload({
-        url: api.firmware.upload,
-        data: formData
-      }).then(res => {
-          this.uploading = false
-          console.log('上传响应:', res)
-          console.log('响应数据:', res.data)
-          console.log('响应代码:', res.code)
-          
-          // 检查响应格式，可能是res.data.code或res.code
-          const responseCode = (res.data && res.data.code) ? res.data.code : res.code;
-          const responseMessage = (res.data && res.data.message) ? res.data.message : res.message;
-          
-          if (responseCode === 200) {
-            this.$message.success('固件上传成功!')
-            this.resetUpload()
-            this.loadFileList()
-          } else {
-            this.$message.error('上传失败: ' + responseMessage)
-          }
-        }).catch((error) => {
-          this.uploading = false
-          console.error('上传错误:', error)
-          this.$message.error('上传失败: ' + (error.response ? error.response.data.message : error.message))
-        })
-    },
-
-    // 重置上传表单
-    resetUpload() {
-      this.uploadForm = {
-        file: null,
-        version: '',
-        description: ''
-      }
-      // 安全地重置表单
-      if (this.$refs.uploadForm && this.$refs.uploadForm.resetFields) {
-        this.$refs.uploadForm.resetFields()
-      }
-      // 清空上传组件的文件列表
-      if (this.$refs.upload && this.$refs.upload.clearFiles) {
-        this.$refs.upload.clearFiles()
-      }
-      // 手动清空上传文件列表
-      this.uploadFileList = []
-    },
-
-    // 下载文件
-    downloadFile(file) {
-      const link = document.createElement('a')
-      link.href = file.downloadUrl
-      link.download = file.fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    },
-
-    // 删除文件
-    deleteFile(file) {
-      // 使用原生confirm作为备选方案
-      if (confirm('确定要删除这个固件文件吗？')) {
-        file.deleting = true
-        console.log('开始删除文件:', file.fileName)
-        
-        const deleteUrl = api.firmware.delete + '/' + file.fileName
-        console.log('删除URL:', deleteUrl)
-        
-        axios
-          .delete({
-            url: deleteUrl
-          })
-          .then(res => {
-            file.deleting = false
-            console.log('删除响应:', res)
-            console.log('删除响应数据:', res.data)
-            console.log('删除响应代码:', res.code)
-            
-            // 检查响应格式
-            const responseCode = (res.data && res.data.code) ? res.data.code : res.code;
-            const responseMessage = (res.data && res.data.message) ? res.data.message : res.message;
-            
-            if (responseCode === 200) {
-              this.$message.success('文件删除成功!')
-              this.loadFileList()
-            } else {
-              this.$message.error('删除失败: ' + responseMessage)
-            }
-          }).catch((error) => {
-            file.deleting = false
-            console.error('删除失败:', error)
-            console.error('删除错误详情:', error.response)
-            this.$message.error('删除失败: ' + (error.response ? error.response.data.message : error.message))
-          })
-      }
-    },
-
-    // 格式化文件大小
-    formatFileSize(bytes) {
-      if (bytes === 0) return '0 B'
-      const k = 1024
-      const sizes = ['B', 'KB', 'MB', 'GB']
-      const i = Math.floor(Math.log(bytes) / Math.log(k))
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-    },
-
-    // 格式化日期
-    formatDate(date) {
-      if (!date) return ''
-      const d = new Date(date)
-      return d.toLocaleString('zh-CN')
-    }
+  } catch (error) {
+    console.error('获取固件列表失败:', error)
+    message.error('获取固件列表失败')
+  } finally {
+    loading.value = false
   }
+}
+
+const beforeUpload: UploadProps['beforeUpload'] = (file) => {
+  const rawFile = file as File
+  if (!rawFile.name.toLowerCase().endsWith('.bin')) {
+    message.error('只能上传 .bin 固件文件')
+    return false
+  }
+
+  if (rawFile.size > MAX_FILE_SIZE) {
+    message.error('固件文件不能超过 2048MB')
+    return false
+  }
+
+  selectedFile.value = rawFile
+  detectedVersion.value = extractVersion(rawFile.name)
+  if (detectedVersion.value && !versionTouched.value) {
+    version.value = detectedVersion.value
+  }
+  uploadProgress.value = 0
+  return false
+}
+
+async function handleUpload() {
+  if (uploadDisabled.value || uploading.value || !selectedFile.value) return
+
+  uploading.value = true
+  uploadProgress.value = 0
+  try {
+    const res = await uploadFirmwareFile(selectedFile.value, normalizedVersion.value, (percent) => {
+      uploadProgress.value = percent
+    })
+
+    if (res.code === 200) {
+      message.success('固件上传成功，版本已绑定为 ' + res.version)
+      resetUpload()
+      await loadFiles()
+      return
+    }
+
+    if (res.code === 409) {
+      const existing = res.data?.fileName ? '：' + res.data.fileName : ''
+      message.warning((res.message || '固件已存在') + existing)
+      await loadFiles()
+      return
+    }
+
+    message.error(res.message || '固件上传失败')
+  } catch (error) {
+    console.error('固件上传失败:', error)
+    message.error('固件上传失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
+function resetUpload() {
+  selectedFile.value = null
+  detectedVersion.value = ''
+  version.value = ''
+  versionTouched.value = false
+  uploadProgress.value = 0
+}
+
+function clearSelectedFile() {
+  selectedFile.value = null
+  detectedVersion.value = ''
+  uploadProgress.value = 0
+}
+
+function confirmDelete(file: FirmwareFile) {
+  Modal.confirm({
+    title: '删除固件文件',
+    content: '删除后该文件将无法作为 OTA 固件下载：' + file.fileName,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      deletingFileName.value = file.fileName
+      try {
+        const res = await deleteFirmwareFile(file.fileName)
+        if (res.code === 200) {
+          message.success('固件已删除')
+          await loadFiles()
+        } else {
+          message.error(res.message || '删除失败')
+        }
+      } finally {
+        deletingFileName.value = ''
+      }
+    },
+  })
+}
+
+function downloadFile(file: FirmwareFile) {
+  const link = document.createElement('a')
+  link.href = file.downloadUrl
+  link.download = file.fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+async function copyDownloadUrl(file: FirmwareFile) {
+  try {
+    await navigator.clipboard.writeText(file.downloadUrl)
+    message.success('下载链接已复制')
+  } catch (error) {
+    console.error('复制下载链接失败:', error)
+    message.error('复制失败')
+  }
+}
+
+function rowClassName(record: FirmwareFile) {
+  return isLatest(record) ? 'firmware-row-latest' : ''
+}
+
+function rowKey(record: FirmwareFile) {
+  return record.fileName
+}
+
+function isLatest(record: FirmwareFile) {
+  return latestFile.value?.fileName === record.fileName
+}
+
+function extractVersion(fileName: string) {
+  const baseName = fileName.replace(/\.bin$/i, '')
+  const match = baseName.match(/(?:^|[_-])(?:v|version[_-]?)([0-9][A-Za-z0-9.-]{0,31})(?:[_-]|$)/i)
+  const versionMatch = match?.[1]
+  return versionMatch ? normalizeVersion(versionMatch) : ''
+}
+
+function normalizeVersion(value: string) {
+  return value.trim().replace(/^v/i, '')
+}
+
+function formatFileSize(bytes = 0) {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return (bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1) + ' ' + units[index]
+}
+
+function formatDate(date: string | number | Date) {
+  if (!date) return '-'
+  return new Date(date).toLocaleString('zh-CN', { hour12: false })
 }
 </script>
 
 <style scoped>
-.firmware-management {
-  padding: 24px;
-  background-color: #f5f5f5;
+.firmware-page {
+  --firmware-bg: #f4f7f6;
+  --firmware-panel: #ffffff;
+  --firmware-ink: #14201d;
+  --firmware-muted: #65736f;
+  --firmware-line: #dbe4e1;
+  --firmware-teal: #0f8b7d;
+  --firmware-blue: #2f6fbd;
+  --firmware-amber: #b87514;
   min-height: 100vh;
-}
-
-.page-header {
-  margin-bottom: 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 24px;
-  border-radius: 12px;
-  color: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background:
+    linear-gradient(135deg, rgba(15, 139, 125, 0.12), transparent 36%),
+    linear-gradient(180deg, #f7faf9 0%, var(--firmware-bg) 100%);
+  color: var(--firmware-ink);
 }
 
-.page-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 600;
-}
-
-.page-header p {
-  margin: 0;
-  font-size: 16px;
-  opacity: 0.9;
-}
-
-.upload-section {
-  margin-bottom: 24px;
-}
-
-.upload-card {
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: none;
-}
-
-.upload-card .el-card__header {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-  border-radius: 12px 12px 0 0;
-  padding: 16px 20px;
-}
-
-.card-header {
+.page-heading {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--firmware-teal);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.page-heading h1,
+.panel-heading h2 {
+  margin: 0;
+  color: var(--firmware-ink);
+}
+
+.page-heading h1 {
+  font-size: 28px;
+  font-weight: 760;
+}
+
+.page-heading p,
+.panel-heading p,
+.metric-panel small {
+  margin: 6px 0 0;
+  color: var(--firmware-muted);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.metric-panel,
+.panel {
+  border: 1px solid var(--firmware-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(36, 54, 49, 0.08);
+}
+
+.metric-panel {
+  display: flex;
+  min-height: 112px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 18px;
+}
+
+.metric-panel span {
+  color: var(--firmware-muted);
+  font-size: 13px;
+}
+
+.metric-panel strong {
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--firmware-ink);
+  font-size: 26px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-primary {
+  border-color: rgba(15, 139, 125, 0.28);
+  background: linear-gradient(135deg, rgba(15, 139, 125, 0.13), rgba(255, 255, 255, 0.95));
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.panel {
+  padding: 18px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.panel-heading h2 {
+  font-size: 18px;
+}
+
+.panel-icon {
+  color: var(--firmware-teal);
+  font-size: 28px;
+}
+
+.firmware-uploader :deep(.ant-upload-drag) {
+  border-color: #b9d6d0;
+  background: linear-gradient(180deg, #fbfefd, #f1f8f6);
+}
+
+.firmware-uploader :deep(.ant-upload-drag:hover) {
+  border-color: var(--firmware-teal);
+}
+
+.firmware-uploader :deep(.ant-upload-drag-icon .anticon) {
+  color: var(--firmware-teal);
+}
+
+.selected-file {
+  display: flex;
   align-items: center;
-  font-weight: 600;
-  font-size: 16px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(15, 139, 125, 0.22);
+  border-radius: 8px;
+  background: #f5fbf9;
 }
 
-.upload-card .el-card__body {
-  padding: 24px;
+.selected-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
-.file-list-section {
-  margin-top: 24px;
+.selected-main .anticon {
+  flex: 0 0 auto;
+  color: var(--firmware-teal);
 }
 
-.file-list-section .el-card {
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: none;
+.selected-main strong,
+.selected-main span {
+  display: block;
 }
 
-.file-list-section .el-card__header {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  color: white;
-  border-radius: 12px 12px 0 0;
-  padding: 16px 20px;
+.selected-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-main span {
+  color: var(--firmware-muted);
+  font-size: 12px;
+}
+
+.version-form {
+  margin-top: 16px;
+}
+
+.upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.list-panel {
+  min-width: 0;
+}
+
+.table-heading {
+  align-items: center;
+}
+
+.file-cell {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.file-cell > .anticon {
+  margin-top: 3px;
+  color: var(--firmware-blue);
+}
+
+.file-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-cell small {
+  color: var(--firmware-muted);
 }
 
 .empty-state {
-  text-align: center;
-  padding: 60px 40px;
-  color: #909399;
-  background: #fafafa;
-  border-radius: 8px;
-  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 42px 0;
+  color: var(--firmware-muted);
 }
 
-.empty-state i {
-  font-size: 64px;
-  margin-bottom: 16px;
-  display: block;
-  color: #d3d4d6;
+.empty-state .anticon {
+  color: var(--firmware-amber);
+  font-size: 28px;
 }
 
-.empty-state p {
-  margin: 0;
-  font-size: 16px;
-  color: #909399;
+:deep(.firmware-row-latest td) {
+  background: #f2faf7 !important;
 }
 
-.el-upload__tip {
-  color: #909399;
-  font-size: 12px;
-  margin-top: 8px;
+@media (max-width: 1100px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.el-form-item {
-  margin-bottom: 24px;
-}
+@media (max-width: 760px) {
+  .firmware-page {
+    padding: 16px;
+  }
 
-.el-form-item__label {
-  font-weight: 600;
-  color: #303133;
-}
+  .page-heading {
+    flex-direction: column;
+  }
 
-.el-input__inner {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  transition: all 0.3s;
-}
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
 
-.el-input__inner:focus {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-}
+  .upload-actions {
+    flex-direction: column-reverse;
+  }
 
-.el-textarea__inner {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  transition: all 0.3s;
-}
-
-.el-textarea__inner:focus {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-}
-
-.el-button {
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.3s;
-  padding: 12px 24px;
-}
-
-.el-button--primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.el-button--primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
-}
-
-.el-button--danger {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-  border: none;
-  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
-}
-
-.el-button--danger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.6);
-}
-
-.el-button--default {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  color: #495057;
-}
-
-.el-button--default:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
-  transform: translateY(-1px);
-}
-
-.el-upload {
-  border: 2px dashed #d9d9d9;
-  border-radius: 12px;
-  background: #fafafa;
-  transition: all 0.3s;
-}
-
-.el-upload:hover {
-  border-color: #409eff;
-  background: #f0f9ff;
-}
-
-.el-upload-dragger {
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  padding: 40px;
-}
-
-.el-upload-dragger:hover {
-  background: rgba(64, 158, 255, 0.05);
-}
-
-.el-table {
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.el-table th {
-  background: #f8f9fa;
-  color: #495057;
-  font-weight: 600;
-}
-
-.el-table td {
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.el-table .el-button--mini {
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 6px;
-}
-
-.el-upload__text {
-  color: #606266;
-  font-size: 14px;
-}
-
-.el-upload__text em {
-  color: #409eff;
-  font-style: normal;
-  font-weight: 500;
-}
-
-.file-upload-container {
-  position: relative;
-}
-
-.upload-fallback {
-  text-align: center;
-  padding: 20px;
-  background: #f8f9fa;
-  border: 2px dashed #dee2e6;
-  border-radius: 8px;
-  margin-top: 10px;
-}
-
-.upload-fallback .el-button {
-  margin-bottom: 10px;
-}
-
-.upload-tip {
-  margin: 0;
-  color: #6c757d;
-  font-size: 14px;
+  .upload-actions .ant-btn {
+    width: 100%;
+  }
 }
 </style>

@@ -31,6 +31,7 @@ vosk-model*
 # 忽略本地配置文件
 application-local.properties
 .env
+.docker-data/
 
 .vscode/
 datasets/

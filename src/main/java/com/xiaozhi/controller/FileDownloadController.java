@@ -1,7 +1,9 @@
 package com.xiaozhi.controller;
 
 import com.xiaozhi.common.web.AjaxResult;
+import com.xiaozhi.common.web.HttpStatus;
 import com.xiaozhi.utils.CmsUtils;
+import com.xiaozhi.utils.FirmwareUtils;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,13 +20,18 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.HexFormat;
 
 /**
  * 文件下载控制器
@@ -76,10 +83,37 @@ public class FileDownloadController extends BaseController {
                 return AjaxResult.error("只支持.bin格式的固件文件");
             }
 
-            // 获取有效的上传路径
+            String firmwareVersion;
+            try {
+                Optional<String> resolvedVersion = FirmwareUtils.resolveVersion(version, originalFilename);
+                if (resolvedVersion.isEmpty()) {
+                    return AjaxResult.error(HttpStatus.BAD_REQUEST, "请填写版本号，或将文件命名为 firmware_v2.3.0.bin 这样的格式");
+                }
+                firmwareVersion = resolvedVersion.get();
+            } catch (IllegalArgumentException e) {
+                return AjaxResult.error(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+
             String effectiveUploadPath = cmsUtils.getEffectiveUploadPath();
-            
-            // 创建上传目录
+            File firmwareRoot = new File(effectiveUploadPath + File.separator + "firmware");
+            String sha256 = calculateSha256(file);
+
+            File duplicateFile = findDuplicateFirmwareFile(firmwareRoot, sha256);
+            if (duplicateFile != null) {
+                return AjaxResult.error(
+                        HttpStatus.CONFLICT,
+                        "该固件内容已存在，已阻止重复上传",
+                        buildFirmwareInfo(duplicateFile));
+            }
+
+            File sameVersionFile = findFirmwareFileByVersion(firmwareRoot, firmwareVersion);
+            if (sameVersionFile != null) {
+                return AjaxResult.error(
+                        HttpStatus.CONFLICT,
+                        "版本 " + firmwareVersion + " 已存在，请先删除旧文件或上传新版本号",
+                        buildFirmwareInfo(sameVersionFile));
+            }
+
             String datePath = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
             String firmwareDir = effectiveUploadPath + File.separator + "firmware" + File.separator + datePath;
             File dir = new File(firmwareDir);
@@ -92,28 +126,18 @@ public class FileDownloadController extends BaseController {
                 logger.info("创建上传目录成功: {}", firmwareDir);
             }
 
-            // 生成文件名
-            String timestamp = String.valueOf(System.currentTimeMillis());
-            String fileName = "firmware_" + timestamp + ".bin";
-            if (StringUtils.hasText(version)) {
-                fileName = "firmware_v" + version + "_" + timestamp + ".bin";
-            }
-
-            // 保存文件
+            String fileName = FirmwareUtils.buildStorageFileName(firmwareVersion, sha256);
             Path filePath = Paths.get(firmwareDir, fileName);
-            logger.info("准备保存文件到: {}", filePath.toString());
-            logger.info("目录是否存在: {}", Files.exists(filePath.getParent()));
-            logger.info("目录是否可写: {}", Files.isWritable(filePath.getParent()));
-            
+            logger.info("准备保存固件文件: {}", filePath);
+
             try {
                 Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-                logger.info("文件保存成功: {}", filePath.toString());
+                logger.info("固件文件保存成功: {}", filePath);
             } catch (Exception e) {
-                logger.error("文件保存失败: {}", filePath.toString(), e);
+                logger.error("固件文件保存失败: {}", filePath, e);
                 return AjaxResult.error("文件保存失败: " + e.getMessage());
             }
 
-            // 生成下载URL
             String downloadUrl = generateDownloadUrl(fileName, datePath);
 
             logger.info("固件文件上传成功: {}, 用户: {}", fileName, CmsUtils.getUserId());
@@ -122,8 +146,10 @@ public class FileDownloadController extends BaseController {
             result.put("fileName", fileName);
             result.put("originalName", originalFilename);
             result.put("downloadUrl", downloadUrl);
-            result.put("version", version);
+            result.put("version", firmwareVersion);
             result.put("description", description);
+            result.put("sha256", sha256);
+            result.put("hash", FirmwareUtils.extractHash(fileName).orElse(""));
             result.put("size", file.getSize());
             result.put("uploadTime", new Date());
 
@@ -215,6 +241,7 @@ public class FileDownloadController extends BaseController {
             AjaxResult result = AjaxResult.success();
             result.put("files", fileList);
             result.put("total", fileList.size());
+            result.put("latest", fileList.isEmpty() ? null : fileList.get(0));
 
             return result;
 
@@ -326,6 +353,105 @@ public class FileDownloadController extends BaseController {
         return null;
     }
 
+    private File findDuplicateFirmwareFile(File dir, String sha256) {
+        if (!dir.exists()) {
+            return null;
+        }
+
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return null;
+        }
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                File found = findDuplicateFirmwareFile(file, sha256);
+                if (found != null) {
+                    return found;
+                }
+            } else if (file.getName().toLowerCase().endsWith(".bin")) {
+                try {
+                    if (sha256.equalsIgnoreCase(calculateSha256(file))) {
+                        return file;
+                    }
+                } catch (IOException e) {
+                    logger.warn("计算已有固件哈希失败，已跳过: {}", file.getAbsolutePath(), e);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private File findFirmwareFileByVersion(File dir, String version) {
+        if (!dir.exists()) {
+            return null;
+        }
+
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return null;
+        }
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                File found = findFirmwareFileByVersion(file, version);
+                if (found != null) {
+                    return found;
+                }
+            } else if (file.getName().toLowerCase().endsWith(".bin")) {
+                Optional<String> fileVersion = FirmwareUtils.extractVersion(file.getName());
+                if (fileVersion.isPresent() && fileVersion.get().equalsIgnoreCase(version)) {
+                    return file;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Map<String, Object> buildFirmwareInfo(File file) {
+        Map<String, Object> fileInfo = new HashMap<>();
+        fileInfo.put("fileName", file.getName());
+        fileInfo.put("version", FirmwareUtils.extractVersion(file.getName()).orElse(""));
+        fileInfo.put("hash", FirmwareUtils.extractHash(file.getName()).orElse(""));
+        fileInfo.put("size", file.length());
+        fileInfo.put("modifyTime", new Date(file.lastModified()));
+        fileInfo.put("downloadUrl", generateDownloadUrl(file.getName(), ""));
+        return fileInfo;
+    }
+
+    private String calculateSha256(MultipartFile file) throws IOException {
+        try (InputStream inputStream = file.getInputStream()) {
+            return calculateSha256(inputStream);
+        }
+    }
+
+    private String calculateSha256(File file) throws IOException {
+        try (InputStream inputStream = Files.newInputStream(file.toPath())) {
+            return calculateSha256(inputStream);
+        }
+    }
+
+    private String calculateSha256(InputStream inputStream) throws IOException {
+        MessageDigest digest = newSha256Digest();
+        try (DigestInputStream digestInputStream = new DigestInputStream(inputStream, digest)) {
+            byte[] buffer = new byte[8192];
+            while (digestInputStream.read(buffer) != -1) {
+                // DigestInputStream updates the digest while bytes are consumed.
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private MessageDigest newSha256Digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("当前运行环境不支持 SHA-256", e);
+        }
+    }
+
     /**
      * 扫描固件文件
      */
@@ -338,13 +464,8 @@ public class FileDownloadController extends BaseController {
         for (File file : files) {
             if (file.isDirectory()) {
                 scanFirmwareFiles(file, fileList);
-            } else if (file.getName().endsWith(".bin")) {
-                Map<String, Object> fileInfo = new HashMap<>();
-                fileInfo.put("fileName", file.getName());
-                fileInfo.put("size", file.length());
-                fileInfo.put("modifyTime", new Date(file.lastModified()));
-                fileInfo.put("downloadUrl", generateDownloadUrl(file.getName(), ""));
-                fileList.add(fileInfo);
+            } else if (file.getName().toLowerCase().endsWith(".bin")) {
+                fileList.add(buildFirmwareInfo(file));
             }
         }
     }

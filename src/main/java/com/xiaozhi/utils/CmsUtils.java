@@ -47,7 +47,7 @@ public class CmsUtils {
     @Value("${xiaozhi.firmware.version:1.0.0}")
     private String firmwareVersion;
 
-    @Value("${xiaozhi.firmware.downloadurl}")
+    @Value("${xiaozhi.firmware.downloadurl:}")
     private String defaultFirewareDownloadUrl;
 
     @Value("${xiaozhi.file.upload-path:}")
@@ -134,6 +134,21 @@ public class CmsUtils {
     }
 
     public String getFirmwareVersion() {
+        try {
+            String effectiveUploadPath = getEffectiveUploadPath();
+            File firmwareDir = new File(effectiveUploadPath + File.separator + "firmware");
+            if (firmwareDir.exists()) {
+                File latestFile = findLatestFirmwareFile(firmwareDir);
+                if (latestFile != null) {
+                    Optional<String> version = FirmwareUtils.extractVersion(latestFile.getName());
+                    if (version.isPresent()) {
+                        return version.get();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("从固件文件名获取版本失败，使用配置版本: {}", e.getMessage());
+        }
         return firmwareVersion;
     }
 
