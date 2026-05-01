@@ -31,39 +31,18 @@ RUN APP_VERSION=$(grep -A1 "<artifactId>xiaozhi.server</artifactId>" pom.xml | g
 # 确保模型目录存在
 RUN mkdir -p /build/models
 
-# 复制模型文件
+# 只复制必要的模型文件（不包含 zip 文件）
 COPY ./models/silero_vad.onnx /build/models/silero_vad.onnx
 
-# 复制 Vosk 模型 zip 文件到构建上下文
-# 支持从 models 目录或项目根目录复制
-# 优先从 models 目录复制，如果不存在则从根目录复制（deploy.sh 会复制到根目录）
-# 注意：COPY 指令如果源文件不存在会失败，所以需要确保至少一个位置有文件
-# 使用 COPY 复制整个 models 目录（包括所有 zip 文件）
-# 手动构建时，zip 文件应该在 models 目录中（如 models/vosk-model-en-us-0.22.zip）
-COPY models/ /build/models_source/
+# 复制 models 目录到临时位置（用于检查 zip 文件是否存在，后续会在同一RUN中删除，不会进入最终layer）
+# 如果 models 目录中只有 silero_vad.onnx，此 COPY 会复制它（冗余但无害，后续会删除整个目录）
+# 如果 models 目录中有 zip 文件，会被复制到这里供后续使用
+COPY ./models /build/models_temp
 
-# 根据语言参数选择对应的模型文件
-# 优先从 models_source 目录（即 models 目录）查找
-# 手动构建：文件在 models 目录，会被复制到 /build/models_source/
-# deploy.sh：文件在根目录，但 deploy.sh 也会将文件复制到 models 目录（如果需要）
-RUN if [ "$VOSK_MODEL_LANG" = "en" ]; then \
-        if [ -f "/build/models_source/vosk-model-en-us-0.22.zip" ]; then \
-            cp /build/models_source/vosk-model-en-us-0.22.zip /build/vosk-model-en-us-0.22.zip && \
-            echo "Using vosk-model-en-us-0.22.zip from models directory"; \
-        else \
-            echo "Warning: vosk-model-en-us-0.22.zip not found in models directory, will download from network"; \
-        fi; \
-    else \
-        if [ -f "/build/models_source/vosk-model-cn-0.22.zip" ]; then \
-            cp /build/models_source/vosk-model-cn-0.22.zip /build/vosk-model-cn-0.22.zip && \
-            echo "Using vosk-model-cn-0.22.zip from models directory"; \
-        else \
-            echo "Warning: vosk-model-cn-0.22.zip not found in models directory, will download from network"; \
-        fi; \
-    fi
-
-# 下载并准备Vosk模型
-RUN mkdir -p /vosk_cache && \
+# 下载并准备Vosk模型（在单个RUN中完成：下载→解压→复制→删除，避免zip文件进入layer）
+# 支持从构建上下文的 models 目录读取 zip 文件，如果不存在则从网络下载
+# 所有操作在临时目录完成，zip文件和解压目录都在同一RUN中创建和删除，不会进入layer
+RUN TEMP_DIR=$(mktemp -d) && \
     if [ "$VOSK_MODEL_SIZE" = "small" ]; then \
         # small 模式：目前只支持中文模型 \
         if [ "$VOSK_MODEL_LANG" = "en" ]; then \
@@ -76,16 +55,19 @@ RUN mkdir -p /vosk_cache && \
             MODEL_FILE="vosk-model-small-cn-0.22.zip"; \
             MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip"; \
         fi && \
-        if [ ! -d "/vosk_cache/${MODEL_NAME}" ]; then \
-            echo "Downloading small Vosk model..." && \
-            cd /vosk_cache && \
-            wget ${MODEL_URL} && \
-            unzip ${MODEL_FILE} && \
-            rm ${MODEL_FILE}; \
+        cd ${TEMP_DIR} && \
+        if [ -f "/build/models_temp/${MODEL_FILE}" ]; then \
+            echo "Using ${MODEL_FILE} from build context..." && \
+            cp /build/models_temp/${MODEL_FILE} .; \
         else \
-            echo "Using cached small Vosk model"; \
+            echo "Downloading ${MODEL_FILE} from network..." && \
+            wget ${MODEL_URL}; \
         fi && \
-        cp -r /vosk_cache/${MODEL_NAME} /build/models/vosk-model; \
+        unzip ${MODEL_FILE} && \
+        cp -r ${MODEL_NAME} /build/models/vosk-model && \
+        cd / && \
+        rm -rf ${TEMP_DIR} && \
+        rm -rf /build/models_temp; \
     else \
         # standard 模式：根据语言参数选择模型 \
         if [ "$VOSK_MODEL_LANG" = "en" ]; then \
@@ -97,24 +79,19 @@ RUN mkdir -p /vosk_cache && \
             MODEL_FILE="vosk-model-cn-0.22.zip"; \
             MODEL_URL="https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip"; \
         fi && \
-        if [ ! -d "/vosk_cache/${MODEL_NAME}" ]; then \
-            if [ -f "/build/${MODEL_FILE}" ]; then \
-                echo "Using existing ${MODEL_FILE} from build context..." && \
-                cd /vosk_cache && \
-                cp /build/${MODEL_FILE} . && \
-                unzip ${MODEL_FILE} && \
-                rm ${MODEL_FILE}; \
-            else \
-                echo "${MODEL_FILE} not found, downloading from network..." && \
-                cd /vosk_cache && \
-                wget ${MODEL_URL} && \
-                unzip ${MODEL_FILE} && \
-                rm ${MODEL_FILE}; \
-            fi; \
+        cd ${TEMP_DIR} && \
+        if [ -f "/build/models_temp/${MODEL_FILE}" ]; then \
+            echo "Using ${MODEL_FILE} from build context..." && \
+            cp /build/models_temp/${MODEL_FILE} .; \
         else \
-            echo "Using cached standard Vosk model: ${MODEL_NAME}"; \
+            echo "Downloading ${MODEL_FILE} from network..." && \
+            wget ${MODEL_URL}; \
         fi && \
-        cp -r /vosk_cache/${MODEL_NAME} /build/models/vosk-model; \
+        unzip ${MODEL_FILE} && \
+        cp -r ${MODEL_NAME} /build/models/vosk-model && \
+        cd / && \
+        rm -rf ${TEMP_DIR} && \
+        rm -rf /build/models_temp; \
     fi
 
 # 使用更小的JRE镜像作为运行时环境
@@ -133,14 +110,34 @@ COPY --from=builder /build/app_version.env /app/
 # 复制模型文件夹
 COPY --from=builder /build/models /app/models
 
-# 设置启动脚本 - 使用 . 代替 source，并确保使用 bash
-RUN echo '#!/bin/bash\n\
-if [ -f /app/app_version.env ]; then\n\
-  . /app/app_version.env\n\
-fi\n\
-echo "Starting application version: ${APP_VERSION}"\n\
-java -Xms512m -Xmx1024m -jar /app/xiaozhi.server-${APP_VERSION}.jar\n\
-' > /app/start.sh && chmod +x /app/start.sh
+# 设置启动脚本 - JVM 参数按 2.5G 机器做了保守优化，支持通过 JAVA_OPTS 覆盖
+RUN cat <<'EOF' > /app/start.sh
+#!/bin/bash
+set -e
+
+if [ -f /app/app_version.env ]; then
+  . /app/app_version.env
+fi
+
+DEFAULT_JAVA_OPTS="-Xms384m -Xmx1536m \
+  -XX:MaxMetaspaceSize=192m \
+  -XX:MaxDirectMemorySize=256m \
+  -XX:ReservedCodeCacheSize=128m \
+  -XX:+UseG1GC \
+  -XX:MaxGCPauseMillis=200 \
+  -XX:InitiatingHeapOccupancyPercent=30 \
+  -XX:+ParallelRefProcEnabled \
+  -XX:+ExitOnOutOfMemoryError \
+  -Dfile.encoding=UTF-8"
+
+JAVA_OPTS="${JAVA_OPTS:-$DEFAULT_JAVA_OPTS}"
+
+echo "Starting application version: ${APP_VERSION}"
+echo "JAVA_OPTS: ${JAVA_OPTS}"
+
+exec java ${JAVA_OPTS} -jar /app/xiaozhi.server-${APP_VERSION}.jar
+EOF
+RUN chmod +x /app/start.sh
 
 # 使用 bash 执行启动脚本
 CMD ["/bin/bash", "/app/start.sh"]
